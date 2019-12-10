@@ -5,10 +5,10 @@ import os
 class GoGoGo:
 
     __chrome_options = webdriver.ChromeOptions()
-    # __chrome_options.add_argument('--headless')
-    # __chrome_options.add_argument('--no-sandbox')
-    # __chrome_options.add_argument('--disable-gpu')
-    # __chrome_options.add_argument('--disable-dev-shm-usage')
+    __chrome_options.add_argument('--headless')
+    __chrome_options.add_argument('--no-sandbox')
+    __chrome_options.add_argument('--disable-gpu')
+    __chrome_options.add_argument('--disable-dev-shm-usage')
     __browser = None
 
     def __init__(self):
