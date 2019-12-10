@@ -7,14 +7,14 @@ import arrow
 
 class AnalyseDaya:
     #要分析的事项列表xls
-    __analyseFilename = '1206温州.xls'
+    __analyseFilename = '1209温州.xls'
 
     def run(self):
         df = pd.read_excel(self.__analyseFilename, sheet_name='Sheet1')['权力内部编码']
         res = []
         for ic in df:
-            if ic != 'cef8e360-d18d-4928-a977-1778e1fb58a5':
-                continue
+            # if ic != 'cef8e360-d18d-4928-a977-1778e1fb58a5':
+            #     continue
             with open('{}/../../数据/{}'.format(os.getcwd(), ic)) as fp:
                 tmp = fp.read()
                 tmp = tmp.replace('<br>', '\n')
@@ -60,7 +60,9 @@ class AnalyseDaya:
         jbxxDic['法定办结时限'] = lowComplete
         jbxxDic['承诺办结时限'] = curComplete
 
-
+        impleCode = et.xpath('//*[@id="impleCode"]/@value')[0]
+        if impleCode == 'ff8080815e01f0b9015e0389183c0f904331400515002':
+            print(ic)
         # 具体地址
         address = ''.join([k.strip() for k in et.xpath('//span[contains(text(), "具体地址")]/..//span[@class="Cons"]/text()')])
         jbxxDic['具体地址'] = address
@@ -76,10 +78,10 @@ class AnalyseDaya:
         #有表格的 办理环节，如果空就是不是表格形式
         applyLink = list(filter(lambda x: x.strip() , [''.join(x.split()) for x in et.xpath('//div[@class="bllc_con"]//td[1]//text()')]))
         rowspan = et.xpath('//div[@class="bllc_con"]//td[1]/@rowspan')
-        print(rowspan)
+        # print(rowspan)
         jbxxDic['办理环节'] = ''.join(applyLink)
         jbxxDic['办理环节数'] = len(applyLink) - 1
-        print(applyLink)
+        # print(applyLink)
 
         #是否收费
         needMoney = ''.join(et.xpath('//div[@class="sfsf"]//div[@class="sfyjCon"]//text()')).strip()
@@ -262,4 +264,4 @@ class AnalyseDaya:
 
 a = AnalyseDaya()
 a.run()
-# a.analyse()
+a.analyse()

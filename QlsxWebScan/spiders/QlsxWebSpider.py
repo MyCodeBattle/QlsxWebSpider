@@ -75,7 +75,7 @@ class QlsxWebSpider(scrapy.Spider):
         ic = response.meta['ic']
         reqValues = response.meta['reqValues']
         DIR = '{}/数据/{}_material'.format(os.getcwd(), ic)
-        if '材料名称' not in response.text:
+        if '申请材料' not in response.text:
             self.__refresh()
             yield scrapy.Request('http://www.zjzwfw.gov.cn/zjservice/item/detail/searchMateriel.do?linkedStr={}&impleCode={}'.format(reqValues, response.meta['impleCode']), callback=self.materialParse, headers=self.HEADERS, meta=response.meta, dont_filter=True)
 
