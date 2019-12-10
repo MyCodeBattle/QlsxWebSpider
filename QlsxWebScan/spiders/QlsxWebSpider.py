@@ -33,14 +33,14 @@ class QlsxWebSpider(scrapy.Spider):
 
 
     def start_requests(self):
-        crawlFilename = '1209温州.xls'
+        crawlFilename = '{}/事项表/1209温州.xls'.format(os.getcwd())
         df = pd.read_excel(os.path.join(os.getcwd(), crawlFilename), sheet_name='Sheet1')
         for ic in df['权力内部编码']:
-            #-------------------------------------------------#
-            if ic != 'cef8e360-d18d-4928-a977-1778e1fb58a5':
-                continue
+            ## -------------------------------------------------#
+            # if ic != 'cef8e360-d18d-4928-a977-1778e1fb58a5':
+            #     continue
 
-            #------------------------------------------------#
+            ##------------------------------------------------#
 
 
             yield scrapy.Request(self.url.format(ic), headers=self.HEADERS, method='GET', callback=self.parse, meta={'innerCode': ic}, dont_filter=True)
@@ -69,14 +69,15 @@ class QlsxWebSpider(scrapy.Spider):
             # 拿到impleCode
             impleCode = et.xpath('//*[@id="impleCode"]/@value')[0]
             totalMaterialValues = ';'.join(et.xpath('//div[@class="apply_material"]//li//@value'))
-            yield scrapy.Request('http://www.zjzwfw.gov.cn/zjservice/item/detail/searchMateriel.do?linkedStr={}&impleCode={}'.format(totalMaterialValues, impleCode), callback=self.materialParse, headers=self.HEADERS, meta={'ic': ic, 'reqValues': totalMaterialValues})
+            yield scrapy.Request('http://www.zjzwfw.gov.cn/zjservice/item/detail/searchMateriel.do?linkedStr={}&impleCode={}'.format(totalMaterialValues, impleCode), callback=self.materialParse, headers=self.HEADERS, meta={'ic': ic, 'reqValues': totalMaterialValues, 'impleCode': impleCode})
 
     def materialParse(self, response):
         ic = response.meta['ic']
+        reqValues = response.meta['reqValues']
         DIR = '{}/数据/{}_material'.format(os.getcwd(), ic)
         if '材料名称' not in response.text:
             self.__refresh()
-            yield scrapy.Request('http://www.zjzwfw.gov.cn/zjservice/item/detail/searchMateriel.do?linkedStr={}'.format(response.meta['reqValues']), callback=self.materialParse, headers=self.HEADERS, meta={'ic': ic}, dont_filter=True)
+            yield scrapy.Request('http://www.zjzwfw.gov.cn/zjservice/item/detail/searchMateriel.do?linkedStr={}&impleCode={}'.format(reqValues, response.meta['impleCode']), callback=self.materialParse, headers=self.HEADERS, meta=response.meta, dont_filter=True)
 
         with open(DIR, 'w') as fp:
             fp.write(response.text)
@@ -89,20 +90,8 @@ class QlsxWebSpider(scrapy.Spider):
             yield scrapy.Request(self.url.format(ic), dont_filter=True, headers=self.HEADERS, method='GET', callback=self.parse, meta={'innerCode': ic})
 
 
-        print('????')
         yield from self.__getMaterials(response.text, ic)
 
 
         with open(DIR, 'w') as fp:
             fp.write(response.text)
-
-        # # print(response.text)
-        # et = etree.HTML(response.text)
-        # print(et.xpath('//title/text()')[0].strip())
-        # print(et.xpath('//td[@class="things_con"]/div/text()')[1].strip())
-        # print(et.xpath('//div[contains(text(), "审批结果样本")]/../../td[@class="things_con"]//a')[0].text)
-        # #基本信息楼层
-        # baseInfoLis = [k.strip() for k in et.xpath('//div[@class="jbxx_tables"]//tr/td/div//text()')]
-        # #具体地址
-        # print(et.xpath('//span[contains(text(), "具体地址")]/..//span[@class="Cons"]/text()'))
-        #
