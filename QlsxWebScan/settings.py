@@ -10,7 +10,7 @@
 #     https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 
 BOT_NAME = 'QlsxWebScan'
-LOG_LEVEL = 'WARNING'
+# LOG_LEVEL = 'WARNING'
 
 SPIDER_MODULES = ['QlsxWebScan.spiders']
 NEWSPIDER_MODULE = 'QlsxWebScan.spiders'
