@@ -1,4 +1,5 @@
 from lxml import etree
+import re
 import os
 from functools import reduce
 import pandas as pd
@@ -7,14 +8,23 @@ import arrow
 
 class AnalyseDaya:
     # 要分析的事项列表xls
-    __analyseFilename = '../../事项表/1214温州市本级.xls'
+    __analyseFilename = '../../事项表/1227温州.xls'
+    with open('部门编码地区映射', 'r') as fp:
+        __areaList = fp.readlines()
+
+    def regionMap(self, code: str):
+
+        for c in self.__areaList:
+            tmp = c.split()
+            if code.startswith(tmp[1].strip()):
+                return tmp[0]
 
     def run(self):
         df = pd.read_excel(self.__analyseFilename, sheet_name='Sheet1')['权力内部编码']
         res1 = []
         res2 = []
         for ic in df:
-            # if ic != 'cef8e360-d18d-4928-a977-1778e1fb58a5':
+            # if ic != '65e48c90-908f-4599-87a3-8af319da67f0':
             #     continue
             try:
                 with open('{}/../../数据/{}'.format(os.getcwd(), ic)) as fp:
@@ -27,14 +37,16 @@ class AnalyseDaya:
                     # print(materialInfo)
                     res1.append(baseInfo)
                     res2 += materialInfo
-            except:
+            except Exception as e:
+                print(e)
+
                 print('wocao')
 
         ddf = pd.DataFrame(res1)
-        ddf2 = pd.DataFrame(res2)
+        # ddf2 = pd.DataFrame(res2)
         w = pd.ExcelWriter('test.xls')
         ddf.to_excel(w, '事项信息', index=False)
-        ddf2.to_excel(w, '材料信息', index=False)
+        # ddf2.to_excel(w, '材料信息', index=False)
         w.save()
         w.close()
 
@@ -45,7 +57,7 @@ class AnalyseDaya:
         template = {'材料名称': 'clmc_con', '来源渠道': 'lyqd_con', '材料形式': 'clxs_con', '纸质材料份数': 'zzclfs_con', '材料必要性': 'clbyx_con', '材料下载': 'zlxz_con', '备注': 'bz_con'}
         l = template
         if isMaterialSplit:
-            l = dict(zip(template.keys(), map(lambda v : v + 's', template.values())))
+            l = dict(zip(template.keys(), map(lambda v: v + 's', template.values())))
 
         # 材料名称，list
         materialName = et.xpath('//*[@id="sbcl"]//*[@class="{}"]/p/text()'.format(l['材料名称']))
@@ -82,11 +94,10 @@ class AnalyseDaya:
         # print(materialScala)
         # print(notes)
         for i in range(len(materialName)):
-        # 组装起来
-            dic = {'材料名称': materialName[i], '来源渠道': fromWhere[i], '材料形式': materialForm[i], '纸质材料份数': paperNumber[i], '材料必要性': necessity[i],  '材料类型': materialKind[i], '纸质材料规格': materialScala[i], '备注': notes[i], '权力内部编码':ic}
+            # 组装起来
+            dic = {'材料名称': materialName[i], '来源渠道': fromWhere[i], '材料形式': materialForm[i], '纸质材料份数': paperNumber[i], '材料必要性': necessity[i], '材料类型': materialKind[i], '纸质材料规格': materialScala[i], '备注': notes[i], '权力内部编码': ic}
             res.append(dic)
         return res
-
 
     def produce(self, et, ic):
 
@@ -173,26 +184,34 @@ class AnalyseDaya:
 
         # 投诉地址
         complainAddress = ''.join(et.xpath('//div[@class="jdtsfs"]//p[@class="zxdz clearfix"]/span[@class="jdtsfsCon"]//text()')).strip()
-        # print(complainAddress)
         jbxxDic['投诉地址'] = complainAddress
+
+        # 国家法律依据
+        countryLow = self.joinStrip(et.xpath('//*[contains(text(), "国家法律依据")]/following-sibling::*//text()'))
+        jbxxDic['国家法律依据'] = countryLow
+
+        # 省级法律依据
+        provincelow = self.joinStrip(et.xpath('//*[contains(text(), "省级法律依据")]/following-sibling::*//text()'))
+        jbxxDic['省级法律依据'] = provincelow
 
         isMaterialSplit = len(et.xpath('//*[@id="sbcl"]//div[@class="apply_material"]')) != 0
 
-        #如果材料分情形，读取情形源码
+        # 如果材料分情形，读取情形源码
         materialInfo = {}
-        if isMaterialSplit:
-            try:
-                with open('{}/../../数据/{}_material'.format(os.getcwd(), ic)) as fp:
-                    et = etree.HTML(fp.read())
-
-            except:
-                print('{}没有材料\n', ic)
-
-        materialInfo = self.materialProduce(et, ic, isMaterialSplit)
+        # if isMaterialSplit:
+        #     try:
+        #         with open('{}/../../数据/{}_material'.format(os.getcwd(), ic)) as fp:
+        #             et = etree.HTML(fp.read())
+        #
+        #     except:
+        #         print('{}没有材料\n', ic)
+        #
+        # materialInfo = self.materialProduce(et, ic, isMaterialSplit)
         return jbxxDic, materialInfo
 
     def analyse(self):
-        df = pd.read_excel('test.xls', sheet_name='事项信息')
+        df = pd.read_excel('test.xls', sheet_name='事项信息').fillna('')
+        # df[['省级法律依据', '国家法律依据', '工作时间', '审批结果名称']] = df[['省级法律依据', '国家法律依据', '工作时间', '审批结果名称']].fillna('').astype(str)
         totRes = []
         for index, row in df.iterrows():
             error = ''
@@ -224,7 +243,7 @@ class AnalyseDaya:
                     idx += 1
             # 到办事现场次数非0次事项需填写原因说明
             if row['到办事现场次数'] != '0次':
-                if pd.isnull(row['必须现场办理原因说明']):
+                if not row['必须现场办理原因说明']:
                     error += '{}. 到办事现场次数非0次事项需填写原因说明\n'.format(idx)
                     idx += 1
             # 跑0次事项除非有特殊原因外不必填写原因说明
@@ -247,13 +266,19 @@ class AnalyseDaya:
 
             # 是否收费为是，则需填写收费依据、是否支持网上支付、收费项目名称、收费标准
             if row['是否收费'] == '是':
-                if pd.isnull(row['收费依据']) or pd.isnull(row['是否支持网上支付']) or pd.isnull(row['收费项目']):
+                if not row['收费依据'] or not row['是否支持网上支付'] or not row['收费项目']:
                     error += '{}. 是否收费为是，则需填写收费依据、是否支持网上支付、收费项目名称、收费标准\n'.format(idx)
                     idx += 1
 
             # 咨询电话和投诉电话不同且必须有，带区号0577
-            if pd.isnull(row['咨询电话']) or pd.isnull(row['投诉电话']) or row['咨询电话'] == row['投诉电话'] or ('0577' not in row['咨询电话'] or '0577' not in row['投诉电话']):
+            if not row['咨询电话'] or not row['投诉电话'] or row['咨询电话'] == row['投诉电话'] or ('0577' not in row['咨询电话'] or '0577' not in row['投诉电话']):
                 error += '{}. 咨询电话和投诉电话不同且必须有，带区号0577\n'.format(idx)
+                idx += 1
+
+            # 工作时间要包括「夏、冬、工作日」
+            keyWords = ['夏', '冬', '工作日']
+            if not reduce(lambda a, b: a & b, map(lambda key: key in row['工作时间'], keyWords)):
+                error += '{}. 工作时间必须包含「夏、冬、工作日」关键字。参考模板：工作日，夏季：上午8：30-12:00，下午2:30-5:30；冬季：上午8:30-12:00，下午2:00-5:00\n'.format(idx)
                 idx += 1
 
             # 咨询和投诉地址不为空且不相等
@@ -263,7 +288,7 @@ class AnalyseDaya:
 
             # 服务对象需与主题分类一致。例如法人事项主题分类为法人，必须有法人主题，且自然人主题应为空。
             res = 0
-            if '法人' in row['服务对象']:
+            if '法人' in row['服务对象'] or '其他组织' in row['服务对象']:
                 res ^= 1
             if '个人' in row['服务对象']:
                 res ^= 1
@@ -281,13 +306,13 @@ class AnalyseDaya:
                 idx += 1
 
             # 联系方式不为空且和投诉电话不相等，并且带0577
-            if pd.isnull(row['联系方式']) or row['联系方式'] == row['投诉电话'] or '0577' not in row['联系方式']:
-                error += '{}. 联系方式不为空且和投诉电话不相等，并且带0577\n'.format(idx)
+            if not row['联系方式'] or row['联系方式'] == row['投诉电话'] or '0577' not in row['联系方式']:
+                error += '{}. 联系方式不为空且和投诉电话不相等，并且带区号0577\n'.format(idx)
                 idx += 1
 
             # 许可类事项环节可能存在异常（必须为表格且包含受理、审核、审批、办结、送达等环节）
-            if row['办理环节数'] < 5 and row['事项类型'] == '行政许可':
-                error += '{}. 许可类事项环节可能存在异常（必须为表格且包含受理、审核、审批、办结、送达等环节）\n'.format(idx)
+            if row['办理环节数'] == -1 and row['事项类型'] == '行政许可':
+                error += '{}. 许可类事项办理流程必须为表格\n'.format(idx)
                 idx += 1
 
             # 如果有审批结果就要有样本
@@ -301,16 +326,41 @@ class AnalyseDaya:
                     error += '{}. 如果不收费，不能支持网上支付\n'.format(idx)
                     idx += 1
 
+            # 国家法律依据不能出现浙江省
+            countryLow = row['国家法律依据']
+            lis = re.compile(r'《.*?》').findall(countryLow)
+            if countryLow and countryLow not in ['无', '无相关法律依据']:
+                if reduce(lambda res1, res2: res1 | res2, map(lambda x: '浙江省' in x, lis), False):
+                    error += '{}. 国家法律依据出现浙江省，可能填写错误\n'.format(idx)
+                    idx += 1
+
+            # 省级法律依据一定要出现浙江省
+            provinceLow = row['省级法律依据']
+            if provinceLow and provinceLow not in ['无', '无相关法律依据']:
+                lis = re.compile(r'《.*?》').findall(provinceLow)
+                if reduce(lambda res1, res2: res1 & res2, map(lambda x: '浙江省' not in x, lis), True):
+                    error += '{}. 省级法律依据没出现浙江省，可能填写错误\n'.format(idx)
+                    idx += 1
+
             totRes.append(error)
 
         df['错误情况'] = pd.Series(totRes)
-        oldDf = pd.read_excel(self.__analyseFilename, sheet_name='Sheet1', usecols=['权力内部编码', '部门名称', '权力基本码'])
+        oldDf = pd.read_excel(self.__analyseFilename, sheet_name='Sheet1', usecols=['权力内部编码', '部门名称', '权力基本码', '组织编码（即部门编码）'], dtype={'组织编码（即部门编码）': str})
+        oldDf['地区'] = oldDf['组织编码（即部门编码）'].apply(lambda e: self.regionMap(e))
         df: pd.DataFrame = pd.merge(df, oldDf, left_on='内部编码', right_on='权力内部编码').drop(columns='内部编码')
         dep = df.pop('部门名称')
         df.insert(0, '部门名称', dep)
-        df.to_excel('{}温州错误情况.xls'.format(arrow.now().format('MMDD')), index=False)
+        # 得到一个总的表
+        df.to_excel('total.xls', index=False)
+        singleDf = df.groupby('地区')
+        for name, d in singleDf:
+            d.to_excel('{}{}错误情况.xls'.format(arrow.now().format('MMDD'), name), index=False)
+
+        # self.__generateTotalExcel(df)
+
+
 
 
 a = AnalyseDaya()
-a.run()
+# a.run()
 a.analyse()
