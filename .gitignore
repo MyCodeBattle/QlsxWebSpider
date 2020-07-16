@@ -6,3 +6,5 @@ chromedriver
 *.swp
 .idea/
 .*
+*.pyc
+venv/
