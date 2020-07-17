@@ -8,8 +8,8 @@ import arrow
 
 class AnalyseDaya:
     # 要分析的事项列表xls
-    __analyseFilename = '../../事项表/1227温州.xls'
-    with open('部门编码地区映射', 'r') as fp:
+    __analyseFilename = '../../事项表/0716许可.xls'
+    with open('部门编码地区映射', 'r', encoding='utf-8') as fp:
         __areaList = fp.readlines()
 
     def regionMap(self, code: str):
@@ -27,7 +27,7 @@ class AnalyseDaya:
             # if ic != '65e48c90-908f-4599-87a3-8af319da67f0':
             #     continue
             try:
-                with open('{}/../../数据/{}'.format(os.getcwd(), ic)) as fp:
+                with open('{}/../../数据/{}'.format(os.getcwd(), ic), 'r', encoding='utf-8') as fp:
                     tmp = fp.read()
                     tmp = tmp.replace('<br>', '\n')
                     # print(tmp)
@@ -187,12 +187,12 @@ class AnalyseDaya:
         jbxxDic['投诉地址'] = complainAddress
 
         # 国家法律依据
-        countryLow = self.joinStrip(et.xpath('//*[contains(text(), "国家法律依据")]/following-sibling::*//text()'))
-        jbxxDic['国家法律依据'] = countryLow
+        # countryLow = self.joinStrip(et.xpath('//*[contains(text(), "国家法律依据")]/following-sibling::*//text()'))
+        # jbxxDic['国家法律依据'] = countryLow
 
         # 省级法律依据
-        provincelow = self.joinStrip(et.xpath('//*[contains(text(), "省级法律依据")]/following-sibling::*//text()'))
-        jbxxDic['省级法律依据'] = provincelow
+        # provincelow = self.joinStrip(et.xpath('//*[contains(text(), "省级法律依据")]/following-sibling::*//text()'))
+        # jbxxDic['省级法律依据'] = provincelow
 
         isMaterialSplit = len(et.xpath('//*[@id="sbcl"]//div[@class="apply_material"]')) != 0
 
@@ -222,33 +222,57 @@ class AnalyseDaya:
                     error += '{}. 承诺办结时间为即办，办件类型必须为即办件，事项审查类型为即审即办\n'.format(idx)
                     idx += 1
             # 承诺办结时间非即办，办件类型必须为承诺件，事项审查类型为先审后批
-            if row['承诺办结时限'] != '即办':
+            elif row['承诺办结时限'] != '即办':
                 if row['办件类型'] != '承诺件' or row['事项审查类型'] != '前审后批':
-                    error += '{}. 承诺办结时间非即办，办件类型必须为承诺件，事项审查类型为先审后批\n'.format(idx)
+                    error += '{}. 承诺办结时间非即办，办件类型必须为承诺件，事项审查类型为前审后批\n'.format(idx)
                     idx += 1
-            # 如审批结果名称为XX证则审批结果类型为出证办结
-            if row['审批结果名称'].endswith('证'):
-                if row['审批结果类型'] != '出证办结':
-                    error += '{}. 如审批结果名称为XX证则审批结果类型为出证办结\n'.format(idx)
-                    idx += 1
-            # 4.如审批结果名称为XX文则审批结果类型为出文办结
-            if row['审批结果名称'].endswith('文'):
-                if row['审批结果类型'] != '出文办结':
-                    error += '{}. 如审批结果名称为XX文则审批结果类型为出文办结\n'.format(idx)
-                    idx += 1
-            # 如审批结果名称为XX批复则审批结果类型为审批办结
-            if row['审批结果名称'].endswith('批复'):
+            # # 如审批结果名称为XX证则审批结果类型为出证办结
+            # if row['审批结果名称'].endswith('证'):
+            #     if row['审批结果类型'] != '出证办结':
+            #         error += '{}. 如审批结果名称为XX证则审批结果类型为出证办结\n'.format(idx)
+            #         idx += 1
+            # # 4.如审批结果名称为XX文则审批结果类型为出文办结
+            # if row['审批结果名称'].endswith('文'):
+            #     if row['审批结果类型'] != '出文办结':
+            #         error += '{}. 如审批结果名称为XX文则审批结果类型为出文办结\n'.format(idx)
+            #         idx += 1
+            # # 如审批结果名称为XX批复则审批结果类型为审批办结
+            # if row['审批结果名称'].endswith('批复'):
+            #     if row['审批结果类型'] != '审批办结':
+            #         error += '{}. 如审批结果名称为XX批复则审批结果类型为审批办结\n'.format(idx)
+            #         idx += 1
+            # modify by wencj start
+            # 2、如审批结果名称为XX批复则审批结果类型为审批办结
+            if '批复' in row['审批结果名称'] or '批文' in row['审批结果名称']:
                 if row['审批结果类型'] != '审批办结':
                     error += '{}. 如审批结果名称为XX批复则审批结果类型为审批办结\n'.format(idx)
                     idx += 1
+            # 2、如审批结果名称为XX证则审批结果类型为出证办结
+            elif (row['审批结果名称'].endswith('证') or '证书' in row['审批结果名称']) and \
+                    '凭证' not in row['审批结果名称'] and '证明' not in row['审批结果名称']:
+                if row['审批结果类型'] != '出证办结':
+                    error += '{}. 如审批结果名称为XX证则审批结果类型为出证办结\n'.format(idx)
+                    idx += 1
+                    # _ws.cell(row=row, column=12).fill = myFill
+
+            # 2、如审批结果名称为XX文则审批结果类型为出文办结
+            elif row['审批结果名称'].endswith('文') or ('文' in row['审批结果名称'] and '批文' not in row['审批结果名称']):
+                if row['审批结果类型'] != '出文办结':
+                    error += '{}. 如审批结果名称为XX文则审批结果类型为出文办结\n'.format(idx)
+                    idx += 1
+            # modify by wencj end
             # 到办事现场次数非0次事项需填写原因说明
-            if row['到办事现场次数'] != '0次':
+            if row['到办事现场次数'] == '':
+                error += '{}. 需填写到现场次数\n'.format(idx)
+                idx += 1
+            elif row['到办事现场次数'] != '0次':
                 if not row['必须现场办理原因说明']:
                     error += '{}. 到办事现场次数非0次事项需填写原因说明\n'.format(idx)
                     idx += 1
             # 跑0次事项除非有特殊原因外不必填写原因说明
-            if row['到办事现场次数'] == '0次':
-                if row['必须现场办理原因说明'] != '无':
+            elif row['到办事现场次数'] == '0次':
+                if (row['必须现场办理原因说明'] != '无' or row['必须现场办理原因说明'] != '') \
+                        and ('现场' in row['必须现场办理原因说明'] and '无需现场' not in row['必须现场办理原因说明']):
                     error += '{}. 跑0次事项除非有特殊原因外不必填写原因说明\n'.format(idx)
                     idx += 1
 
@@ -276,15 +300,28 @@ class AnalyseDaya:
                 idx += 1
 
             # 工作时间要包括「夏、冬、工作日」
-            keyWords = ['夏', '冬', '工作日']
+            # keyWords = ['夏', '冬', '工作日']
+            keyWords = ['工作日']
             if not reduce(lambda a, b: a & b, map(lambda key: key in row['工作时间'], keyWords)):
-                error += '{}. 工作时间必须包含「夏、冬、工作日」关键字。参考模板：工作日，夏季：上午8：30-12:00，下午2:30-5:30；冬季：上午8:30-12:00，下午2:00-5:00\n'.format(idx)
+                error += '{}. 工作时间必须包含「工作日」关键字。参考模板：工作日，夏季：上午8：30-12:00，下午2:30-5:30；春、秋、冬季：上午8:30-12:00，下午2:00-5:00\n'.format(idx)
                 idx += 1
 
             # 咨询和投诉地址不为空且不相等
             # if pd.isnull(row['咨询地址']) or pd.isnull(row['投诉地址']) or row['咨询地址'] == row['投诉地址']:
             #     error += '{}. 咨询和投诉地址不为空且不相等\n'.format(idx)
             #     idx += 1
+            if not row['咨询地址'] or not row['投诉地址']:
+                error += '{}. 咨询和投诉地址不为空\n'.format(idx)
+                idx += 1
+            else:
+                if not ('窗口' in row['咨询地址'] or '号' in row['咨询地址'] or '室' in row['咨询地址'] or '幢' in row['咨询地址']
+                        or '楼' in row['咨询地址'] or '办公室' in row['咨询地址']):
+                    error += '{}. 咨询地址需精确到门牌号或窗口号\n'.format(idx)
+                    idx += 1
+                if not ('窗口' in row['投诉地址'] or '号' in row['投诉地址'] or '室' in row['投诉地址'] or '幢' in row['投诉地址']
+                        or '楼' in row['投诉地址'] or '办公室' in row['投诉地址']):
+                    error += '{}. 投诉地址需精确到门牌号或窗口号\n'.format(idx)
+                    idx += 1
 
             # 服务对象需与主题分类一致。例如法人事项主题分类为法人，必须有法人主题，且自然人主题应为空。
             res = 0
@@ -326,28 +363,31 @@ class AnalyseDaya:
                     error += '{}. 如果不收费，不能支持网上支付\n'.format(idx)
                     idx += 1
 
-            # 国家法律依据不能出现浙江省
-            countryLow = row['国家法律依据']
-            lis = re.compile(r'《.*?》').findall(countryLow)
-            if countryLow and countryLow not in ['无', '无相关法律依据']:
-                if reduce(lambda res1, res2: res1 | res2, map(lambda x: '浙江省' in x, lis), False):
-                    error += '{}. 国家法律依据出现浙江省，可能填写错误\n'.format(idx)
-                    idx += 1
-
-            # 省级法律依据一定要出现浙江省
-            provinceLow = row['省级法律依据']
-            if provinceLow and provinceLow not in ['无', '无相关法律依据']:
-                lis = re.compile(r'《.*?》').findall(provinceLow)
-                if reduce(lambda res1, res2: res1 & res2, map(lambda x: '浙江省' not in x, lis), True):
-                    error += '{}. 省级法律依据没出现浙江省，可能填写错误\n'.format(idx)
-                    idx += 1
-
+            # # 国家法律依据不能出现浙江省
+            # countryLow = row['国家法律依据']
+            # # lis = re.compile(r'《.*?》').findall(countryLow)
+            # if countryLow and countryLow not in ['无', '无相关法律依据', '无特定法律依据']:
+            #     # if reduce(lambda res1, res2: res1 | res2, map(lambda x: '浙江省' in x, lis), False):
+            #     if '浙江省' in countryLow:
+            #         error += '{}. 国家法律依据出现省级法律\n'.format(idx)
+            #         idx += 1
+            #
+            # # 省级法律依据一定要出现浙江省
+            # provinceLow = row['省级法律依据']
+            # if provinceLow and provinceLow not in ['无', '无相关法律依据', '无特定法律依据']:
+            #     lis = re.compile(r'《.*?》').findall(provinceLow)
+            #     if reduce(lambda res1, res2: res1 & res2, map(lambda x: '浙江省' not in x, lis), True):
+            #     # if '中华人民共和国' in provinceLow or '部令' in provinceLow or '总局令' in provinceLow \
+            #     #         or '国务院' in provinceLow or '主席令' in provinceLow and '浙江省实施' not in provinceLow:
+            #         error += '{}. 省级法律依据一定要有浙江省\n'.format(idx)
+            #         idx += 1
             totRes.append(error)
 
         df['错误情况'] = pd.Series(totRes)
         oldDf = pd.read_excel(self.__analyseFilename, sheet_name='Sheet1', usecols=['权力内部编码', '部门名称', '权力基本码', '组织编码（即部门编码）'], dtype={'组织编码（即部门编码）': str})
         oldDf['地区'] = oldDf['组织编码（即部门编码）'].apply(lambda e: self.regionMap(e))
         df: pd.DataFrame = pd.merge(df, oldDf, left_on='内部编码', right_on='权力内部编码').drop(columns='内部编码')
+        df['事项地址'] = 'http://www.zjzwfw.gov.cn/zjservice/item/detail/index.do?localInnerCode=' + df['权力内部编码']
         dep = df.pop('部门名称')
         df.insert(0, '部门名称', dep)
         # 得到一个总的表
@@ -358,9 +398,9 @@ class AnalyseDaya:
 
         # self.__generateTotalExcel(df)
 
-
-
+    def analyseStatics(self):
+        df = pd.read_excel('total.xls')
 
 a = AnalyseDaya()
-# a.run()
+a.run()
 a.analyse()
