@@ -33,7 +33,7 @@ class QlsxWebSpider(scrapy.Spider):
 
 
     def start_requests(self):
-        crawlFilename = '{}/事项表/0716许可.xls'.format(os.getcwd())
+        crawlFilename = '{}/事项表/0723市本级许可.xls'.format(os.getcwd())
         df = pd.read_excel(os.path.join(os.getcwd(), crawlFilename), sheet_name='Sheet1')
         for ic in df['权力内部编码']:
             ## -------------------------------------------------#
@@ -79,7 +79,7 @@ class QlsxWebSpider(scrapy.Spider):
             self.__refresh()
             yield scrapy.Request('http://www.zjzwfw.gov.cn/zjservice/item/detail/searchMateriel.do?linkedStr={}&impleCode={}'.format(reqValues, response.meta['impleCode']), callback=self.materialParse, headers=self.HEADERS, meta=response.meta, dont_filter=True)
 
-        with open(DIR, 'w') as fp:
+        with open(DIR, 'w', encoding='utf-8') as fp:
             fp.write(response.text)
 
     def parse(self, response):
@@ -93,5 +93,5 @@ class QlsxWebSpider(scrapy.Spider):
         # yield from self.__getMaterials(response.text, ic)
         #
 
-        with open(DIR, 'w') as fp:
+        with open(DIR, 'w', encoding='utf-8') as fp:
             fp.write(response.text)

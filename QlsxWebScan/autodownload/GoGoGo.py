@@ -12,7 +12,7 @@ class GoGoGo:
     __browser = None
 
     def __init__(self):
-        self.__browser = webdriver.Chrome(os.path.join(os.getcwd(), 'chromedriver'), options=self.__chrome_options)
+        self.__browser = webdriver.Chrome(os.path.join(os.getcwd(), 'config/chromedriver.exe'), options=self.__chrome_options)
 
     def __waitElement(self, xpath):
         while True:

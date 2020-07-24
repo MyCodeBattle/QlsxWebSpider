@@ -4,11 +4,12 @@ import os
 from functools import reduce
 import pandas as pd
 import arrow
+import traceback
 
 
 class AnalyseDaya:
     # 要分析的事项列表xls
-    __analyseFilename = '../../事项表/0716许可.xls'
+    __analyseFilename = '../../事项表/0723市本级许可.xls'
     with open('部门编码地区映射', 'r', encoding='utf-8') as fp:
         __areaList = fp.readlines()
 
@@ -38,9 +39,10 @@ class AnalyseDaya:
                     res1.append(baseInfo)
                     res2 += materialInfo
             except Exception as e:
-                print(e)
 
-                print('wocao')
+                traceback.print_exc()
+                print('{}有问题'.format(ic))
+
 
         ddf = pd.DataFrame(res1)
         # ddf2 = pd.DataFrame(res2)
@@ -272,7 +274,7 @@ class AnalyseDaya:
             # 跑0次事项除非有特殊原因外不必填写原因说明
             elif row['到办事现场次数'] == '0次':
                 if (row['必须现场办理原因说明'] != '无' or row['必须现场办理原因说明'] != '') \
-                        and ('现场' in row['必须现场办理原因说明'] and '无需现场' not in row['必须现场办理原因说明']):
+                        and ('现场' in row['必须现场办理原因说明'] and '无需现场' not in row['必须现场办理原因说明'] and row['必须现场办理原因说明'] != '无需到现场办理'):
                     error += '{}. 跑0次事项除非有特殊原因外不必填写原因说明\n'.format(idx)
                     idx += 1
 
@@ -313,15 +315,15 @@ class AnalyseDaya:
             if not row['咨询地址'] or not row['投诉地址']:
                 error += '{}. 咨询和投诉地址不为空\n'.format(idx)
                 idx += 1
-            else:
-                if not ('窗口' in row['咨询地址'] or '号' in row['咨询地址'] or '室' in row['咨询地址'] or '幢' in row['咨询地址']
-                        or '楼' in row['咨询地址'] or '办公室' in row['咨询地址']):
-                    error += '{}. 咨询地址需精确到门牌号或窗口号\n'.format(idx)
-                    idx += 1
-                if not ('窗口' in row['投诉地址'] or '号' in row['投诉地址'] or '室' in row['投诉地址'] or '幢' in row['投诉地址']
-                        or '楼' in row['投诉地址'] or '办公室' in row['投诉地址']):
-                    error += '{}. 投诉地址需精确到门牌号或窗口号\n'.format(idx)
-                    idx += 1
+            # else:
+            #     if not ('窗口' in row['咨询地址'] or '号' in row['咨询地址'] or '室' in row['咨询地址'] or '幢' in row['咨询地址']
+            #             or '楼' in row['咨询地址'] or '办公室' in row['咨询地址']):
+            #         error += '{}. 咨询地址需精确到门牌号或窗口号\n'.format(idx)
+            #         idx += 1
+            #     if not ('窗口' in row['投诉地址'] or '号' in row['投诉地址'] or '室' in row['投诉地址'] or '幢' in row['投诉地址']
+            #             or '楼' in row['投诉地址'] or '办公室' in row['投诉地址']):
+            #         error += '{}. 投诉地址需精确到门牌号或窗口号\n'.format(idx)
+            #         idx += 1
 
             # 服务对象需与主题分类一致。例如法人事项主题分类为法人，必须有法人主题，且自然人主题应为空。
             res = 0
@@ -381,6 +383,8 @@ class AnalyseDaya:
             #     #         or '国务院' in provinceLow or '主席令' in provinceLow and '浙江省实施' not in provinceLow:
             #         error += '{}. 省级法律依据一定要有浙江省\n'.format(idx)
             #         idx += 1
+
+            error = error.strip()  #去除最后的换行
             totRes.append(error)
 
         df['错误情况'] = pd.Series(totRes)
