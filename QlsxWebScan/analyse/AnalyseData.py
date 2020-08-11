@@ -9,7 +9,7 @@ import traceback
 
 class AnalyseDaya:
     # 要分析的事项列表xls
-    __analyseFilename = '../../事项表/0723市本级许可.xls'
+    __analyseFilename = '../../事项表/0810平阳.xls'
     with open('部门编码地区映射', 'r', encoding='utf-8') as fp:
         __areaList = fp.readlines()
 
@@ -117,12 +117,15 @@ class AnalyseDaya:
             if jbxx[i] not in jbxxDic and jbxx[(i + 1) % len(jbxx)] not in jbxxDic:
                 jbxxDic[jbxx[i]] = jbxx[(i + 1) % len(jbxx)]
 
+        if et.xpath('//a[contains(text(),"样本下载")]'):
+            jbxxDic['审批结果样本'] = '有样本'
         # 法定办结时限和承诺办结期限
         totalCompleteTime = et.xpath('//table[@id="table1"]//div[contains(text(), "法定办结时限")]/../..//span/text()')
         lowComplete = totalCompleteTime[0].strip()
         curComplete = totalCompleteTime[1].strip()
         jbxxDic['法定办结时限'] = lowComplete
         jbxxDic['承诺办结时限'] = curComplete
+        jbxxDic['承诺期限数字'] = 0 if '即办' in curComplete else int(re.findall(r'\d+', curComplete)[0])
 
         impleCode = et.xpath('//*[@id="impleCode"]/@value')[0]
         if impleCode == 'ff8080815e01f0b9015e0389183c0f904331400515002':
@@ -146,6 +149,11 @@ class AnalyseDaya:
         jbxxDic['办理环节'] = ''.join(applyLink)
         jbxxDic['办理环节数'] = len(applyLink) - 1
         # print(applyLink)
+        
+        #表格里的时间和承诺时间对比
+        tableSum = self.__getTableSum(et)
+        jbxxDic['表格流程时间和'] = tableSum
+
 
         # 是否收费
         needMoney = ''.join(et.xpath('//div[@class="sfsf"]//div[@class="sfyjCon"]//text()')).strip()
@@ -216,6 +224,9 @@ class AnalyseDaya:
         # df[['省级法律依据', '国家法律依据', '工作时间', '审批结果名称']] = df[['省级法律依据', '国家法律依据', '工作时间', '审批结果名称']].fillna('').astype(str)
         totRes = []
         for index, row in df.iterrows():
+            if row['事项名称'] == '无':
+                continue
+
             error = ''
             idx = 1
             # 承诺办结时间为即办，办件类型必须为即办件，事项审查类型为即审即办
@@ -255,13 +266,15 @@ class AnalyseDaya:
                 if row['审批结果类型'] != '出证办结':
                     error += '{}. 如审批结果名称为XX证则审批结果类型为出证办结\n'.format(idx)
                     idx += 1
-                    # _ws.cell(row=row, column=12).fill = myFill
 
             # 2、如审批结果名称为XX文则审批结果类型为出文办结
             elif row['审批结果名称'].endswith('文') or ('文' in row['审批结果名称'] and '批文' not in row['审批结果名称']):
                 if row['审批结果类型'] != '出文办结':
                     error += '{}. 如审批结果名称为XX文则审批结果类型为出文办结\n'.format(idx)
                     idx += 1
+            elif row['审批结果名称'] and row['审批结果名称'] != '无' and (not row['审批结果类型'] or row['审批结果类型'] == '无'):
+                error += '{}. 有审批结果一定要有审批结果类型\n'.format(idx)
+                idx += 1
             # modify by wencj end
             # 到办事现场次数非0次事项需填写原因说明
             if row['到办事现场次数'] == '':
@@ -304,7 +317,7 @@ class AnalyseDaya:
             # 工作时间要包括「夏、冬、工作日」
             # keyWords = ['夏', '冬', '工作日']
             keyWords = ['工作日']
-            if not reduce(lambda a, b: a & b, map(lambda key: key in row['工作时间'], keyWords)):
+            if not reduce(lambda a, b: a & b, map(lambda key: key in row['工作时间'], keyWords)) and '全天' not in row['工作时间'] and '24小时' not in row['工作时间']:
                 error += '{}. 工作时间必须包含「工作日」关键字。参考模板：工作日，夏季：上午8：30-12:00，下午2:30-5:30；春、秋、冬季：上午8:30-12:00，下午2:00-5:00\n'.format(idx)
                 idx += 1
 
@@ -326,14 +339,15 @@ class AnalyseDaya:
             #         idx += 1
 
             # 服务对象需与主题分类一致。例如法人事项主题分类为法人，必须有法人主题，且自然人主题应为空。
+            objects = row['服务对象'].split('/')
             res = 0
             if '法人' in row['服务对象'] or '其他组织' in row['服务对象']:
                 res ^= 1
-            if '个人' in row['服务对象']:
+            if '个人' in objects:
                 res ^= 1
-            if row['自然人主题分类'] != '无':
+            if row['自然人主题分类'] not in ['无', '不涉及']:
                 res ^= 1
-            if row['法人主题分类'] != '无':
+            if row['法人主题分类'] not in ['无', '不涉及']:
                 res ^= 1
             if res != 0:
                 error += '{}. 服务对象需与主题分类一致。例如法人事项主题分类为法人，必须有法人主题，且自然人主题应为空。\n'.format(idx)
@@ -354,9 +368,14 @@ class AnalyseDaya:
                 error += '{}. 许可类事项办理流程必须为表格\n'.format(idx)
                 idx += 1
 
+            #表格流程时间之和等于承诺期限，许可专用
+            if row['表格流程时间和'] > row['承诺期限数字'] and row['事项类型'] == '行政许可':
+                error += '{}. 表格流程时间之和（受理、审核、审批、办结）不等于承诺期限\n'.format(idx)
+                idx += 1
+
             # 如果有审批结果就要有样本
             if row['审批结果名称'] != '无':
-                if row['审批结果样本'] == '无样本':
+                if row['审批结果样本'] != '有样本':
                     error += '{}. 如果有审批结果就要有样本\n'.format(idx)
                     idx += 1
             # 如果不收费，不能支持网上支付
@@ -404,6 +423,30 @@ class AnalyseDaya:
 
     def analyseStatics(self):
         df = pd.read_excel('total.xls')
+
+    def __getTableSum(self, html):
+        rows = len(html.xpath('//div[@class="bllc_con"]//tr'))
+
+        firstInclude = False
+        keywords = ['受理', '审核', '审查', '核准', '决定', '办结', '审批', '制证', '签发']
+        sum = 0
+        for i in range(1, rows + 1):
+            procedure = ''.join(html.xpath('//div[@class="bllc_con"]//tr[{}]/td[1]//text()'.format(i)))
+            selected = reduce(lambda a, b: a | b, [k in procedure for k in keywords], False)
+            if selected:
+                curTime = ''.join(html.xpath('//div[@class="bllc_con"]//tr[{}]/td[2]//text()'.format(i)))
+                workDays = re.findall(r'\d+', curTime)
+                if '即办' in curTime:
+                    continue
+                if '包含' in curTime:
+                    if not firstInclude:
+                        firstInclude = True
+                        if workDays:
+                            sum += int(workDays[0])
+                elif workDays:
+                    sum += int(workDays[0])
+
+        return sum
 
 a = AnalyseDaya()
 a.run()
