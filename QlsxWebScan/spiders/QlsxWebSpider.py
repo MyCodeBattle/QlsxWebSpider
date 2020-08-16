@@ -33,7 +33,7 @@ class QlsxWebSpider(scrapy.Spider):
 
 
     def start_requests(self):
-        crawlFilename = '{}/事项表/0811全市事项.xls'.format(os.getcwd())
+        crawlFilename = '{}/事项表/0805许可类事项.xls'.format(os.getcwd())
         df = pd.read_excel(os.path.join(os.getcwd(), crawlFilename), sheet_name='Sheet1')
         for ic in df['权力内部编码']:
             ## -------------------------------------------------#

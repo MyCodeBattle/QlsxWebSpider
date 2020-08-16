@@ -5,11 +5,12 @@ from functools import reduce
 import pandas as pd
 import arrow
 import traceback
+from tqdm import tqdm
 
 
 class AnalyseDaya:
     # 要分析的事项列表xls
-    __analyseFilename = '../../事项表/0810平阳.xls'
+    __analyseFilename = '../../事项表/0805许可类事项.xls'
     with open('部门编码地区映射', 'r', encoding='utf-8') as fp:
         __areaList = fp.readlines()
 
@@ -24,7 +25,7 @@ class AnalyseDaya:
         df = pd.read_excel(self.__analyseFilename, sheet_name='Sheet1')['权力内部编码']
         res1 = []
         res2 = []
-        for ic in df:
+        for ic in tqdm(df, ncols=100):
             # if ic != '65e48c90-908f-4599-87a3-8af319da67f0':
             #     continue
             try:
@@ -33,7 +34,6 @@ class AnalyseDaya:
                     tmp = tmp.replace('<br>', '\n')
                     # print(tmp)
                     et = etree.HTML(tmp)
-                    print(ic)
                     baseInfo, materialInfo = self.produce(et, ic)
                     # print(materialInfo)
                     res1.append(baseInfo)
@@ -436,13 +436,12 @@ class AnalyseDaya:
             if selected:
                 curTime = ''.join(html.xpath('//div[@class="bllc_con"]//tr[{}]/td[2]//text()'.format(i)))
                 workDays = re.findall(r'\d+', curTime)
+                if '不包含在承诺办结时限内' in curTime or '不属于市级承诺时间范围' in curTime:
+                    continue
                 if '即办' in curTime:
                     continue
                 if '包含' in curTime:
-                    if not firstInclude:
-                        firstInclude = True
-                        if workDays:
-                            sum += int(workDays[0])
+                    continue
                 elif workDays:
                     sum += int(workDays[0])
 
