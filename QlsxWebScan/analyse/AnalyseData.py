@@ -1,5 +1,6 @@
 from lxml import etree
 import re
+from typing import List
 import os
 from functools import reduce
 import pandas as pd
@@ -10,7 +11,7 @@ from tqdm import tqdm
 
 class AnalyseDaya:
     # 要分析的事项列表xls
-    __analyseFilename = '../../事项表/0805许可类事项.xls'
+    __analyseFilename = '../../事项表/0819全市许可.xls'
     with open('部门编码地区映射', 'r', encoding='utf-8') as fp:
         __areaList = fp.readlines()
 
@@ -321,11 +322,18 @@ class AnalyseDaya:
                 error += '{}. 工作时间必须包含「工作日」关键字。参考模板：工作日，夏季：上午8：30-12:00，下午2:30-5:30；春、秋、冬季：上午8:30-12:00，下午2:00-5:00\n'.format(idx)
                 idx += 1
 
+
+            #办理地址要精确到窗口/门牌号
+            #按括号为分界split，判断各个部分有没有
+            if not self.__isAddressAccurate(row['具体地址']):
+                error += '{}. 办理地址要精确到窗口/门牌号\n'.format(idx)
+                idx += 1
+
             # 咨询和投诉地址不为空且不相等
             # if pd.isnull(row['咨询地址']) or pd.isnull(row['投诉地址']) or row['咨询地址'] == row['投诉地址']:
             #     error += '{}. 咨询和投诉地址不为空且不相等\n'.format(idx)
             #     idx += 1
-            if not row['咨询地址'] or not row['投诉地址']:
+            if not row['咨询地址'] or not row['投诉地址'] or row['咨询地址'] == '无' or row['投诉地址'] == '无':
                 error += '{}. 咨询和投诉地址不为空\n'.format(idx)
                 idx += 1
             # else:
@@ -446,6 +454,21 @@ class AnalyseDaya:
                     sum += int(workDays[0])
 
         return sum
+
+    def __isAddressAccurate(self, row):
+        dealAddress: List[str] = row.replace('（', '#').replace('）', '#').split('#')
+        for add in dealAddress:
+            if not add:
+                continue
+            if '窗口' in add or '室' in add or '专区' in add or '中台' in add:
+                return True
+            if re.search(r'[A-Z].*区.*\d', add):
+                return True
+            if add[-1].isdigit():
+                return True
+
+
+        return False
 
 a = AnalyseDaya()
 a.run()
