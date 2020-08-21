@@ -453,7 +453,7 @@ class AnalyseDaya:
                 elif workDays:
                     sum += float(workDays[0])
 
-        return sum
+        return int(sum)
 
     def __isAddressAccurate(self, row):
         dealAddress: List[str] = row.replace('（', '#').replace('）', '#').split('#')
