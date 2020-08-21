@@ -443,7 +443,7 @@ class AnalyseDaya:
             selected = reduce(lambda a, b: a | b, [k in procedure for k in keywords], False)
             if selected:
                 curTime = ''.join(html.xpath('//div[@class="bllc_con"]//tr[{}]/td[2]//text()'.format(i)))
-                workDays = re.findall(r'\d+', curTime)
+                workDays = re.findall(r'\d\.*\d*', curTime)
                 if '不包含在承诺办结时限内' in curTime or '不属于市级承诺时间范围' in curTime:
                     continue
                 if '即办' in curTime:
@@ -451,7 +451,7 @@ class AnalyseDaya:
                 if '包含' in curTime:
                     continue
                 elif workDays:
-                    sum += int(workDays[0])
+                    sum += float(workDays[0])
 
         return sum
 
