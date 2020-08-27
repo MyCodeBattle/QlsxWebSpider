@@ -9,7 +9,7 @@ import traceback
 from tqdm import tqdm
 
 
-class AnalyseDaya:
+class AnalyseData:
     # 要分析的事项列表xls
     __analyseFilename = '../../事项表/0819全市许可.xls'
     with open('部门编码地区映射', 'r', encoding='utf-8') as fp:
@@ -23,86 +23,35 @@ class AnalyseDaya:
                 return tmp[0]
 
     def run(self):
-        df = pd.read_excel(self.__analyseFilename, sheet_name='Sheet1')['权力内部编码']
+        df = pd.read_excel(self.__analyseFilename, sheet_name='Sheet1', dtype=str).fillna('')
+        df['区县'] = df['组织编码（即部门编码）'].apply(lambda e: self.regionMap(e))
         res1 = []
-        res2 = []
-        for ic in tqdm(df, ncols=100):
-            # if ic != '65e48c90-908f-4599-87a3-8af319da67f0':
-            #     continue
+        for idx, row in tqdm(df.iterrows(), ncols=100):
             try:
-                with open('{}/../../数据/{}'.format(os.getcwd(), ic), 'r', encoding='utf-8') as fp:
+                with open('{}/../../数据/{}'.format(os.getcwd(), row['权力内部编码']), 'r', encoding='utf-8') as fp:
                     tmp = fp.read()
                     tmp = tmp.replace('<br>', '\n')
-                    # print(tmp)
                     et = etree.HTML(tmp)
-                    baseInfo, materialInfo = self.produce(et, ic)
-                    # print(materialInfo)
+                    baseInfo = self.produce(et, row)
                     res1.append(baseInfo)
-                    res2 += materialInfo
             except Exception as e:
 
                 traceback.print_exc()
-                print('{}有问题'.format(ic))
+                print('{}有问题'.format(row['权力内部编码']))
 
 
         ddf = pd.DataFrame(res1)
-        # ddf2 = pd.DataFrame(res2)
         w = pd.ExcelWriter('test.xls')
         ddf.to_excel(w, '事项信息', index=False)
-        # ddf2.to_excel(w, '材料信息', index=False)
         w.save()
         w.close()
 
     def joinStrip(self, lis):
         return ''.join([x.strip() for x in lis])
 
-    def materialProduce(self, et, ic, isMaterialSplit):
-        template = {'材料名称': 'clmc_con', '来源渠道': 'lyqd_con', '材料形式': 'clxs_con', '纸质材料份数': 'zzclfs_con', '材料必要性': 'clbyx_con', '材料下载': 'zlxz_con', '备注': 'bz_con'}
-        l = template
-        if isMaterialSplit:
-            l = dict(zip(template.keys(), map(lambda v: v + 's', template.values())))
 
-        # 材料名称，list
-        materialName = et.xpath('//*[@id="sbcl"]//*[@class="{}"]/p/text()'.format(l['材料名称']))
 
-        # 来源渠道
-        fromWhere = et.xpath('//span[@class="{}"]//p/text()'.format(l['来源渠道']))
-
-        # 材料形式
-        materialForm = et.xpath('//span[@class="{}"]/text()'.format(l['材料形式']))
-
-        # 纸质材料份数
-        paperNumber = et.xpath('//span[@class="{}"]//text()'.format(l['纸质材料份数']))
-
-        # 材料必要性
-        necessity = et.xpath('//span[@class="{}"]//text()'.format(l['材料必要性']))
-
-        # 材料下载
-        # downloads = et.xpath('//span[@class="{}"]//a/@href'.format(l['材料下载']))
-
-        # 材料类型
-        materialKind = et.xpath('//span[@class="cllx_con"]//text()')
-
-        # 纸质材料规格
-        materialScala = et.xpath('//span[@class="zzclgg_con"]//text()')
-
-        # 备注
-        notes = et.xpath('//span[@class="{}"]/p/text()'.format(l['备注']))
-
-        res = []
-        # print(materialForm)
-        # print(paperNumber)
-        # print(necessity)
-        # print(materialKind)
-        # print(materialScala)
-        # print(notes)
-        for i in range(len(materialName)):
-            # 组装起来
-            dic = {'材料名称': materialName[i], '来源渠道': fromWhere[i], '材料形式': materialForm[i], '纸质材料份数': paperNumber[i], '材料必要性': necessity[i], '材料类型': materialKind[i], '纸质材料规格': materialScala[i], '备注': notes[i], '权力内部编码': ic}
-            res.append(dic)
-        return res
-
-    def produce(self, et, ic):
+    def produce(self, et, row):
 
         jbxx = list(filter(lambda x: x not in ['事项信息', '办事信息', '结果信息'], map(lambda x: x.strip(), et.xpath('//div[@class="jbxx_tables"]//td/div/text()'))))
         newJbxx = []
@@ -110,9 +59,10 @@ class AnalyseDaya:
             if jbxx[i] != jbxx[i + 1]:
                 newJbxx.append(jbxx[i])
         jbxx = newJbxx
-        # print(jbxx)
 
-        jbxxDic = {'内部编码': ic}
+        #组装基本信息
+        jbxxDic = {'内部编码': row['权力内部编码'], '部门名称': row['部门名称'], '部门编码': row['组织编码（即部门编码）'], '事项名称': row['权力名称'], '权力基本码': row['权力基本码'], '区县': row['区县']}
+
         for i in range(0, len(jbxx), 2):
             # print('{} {}\n'.format(jbxx[i], jbxx[i+1]))
             if jbxx[i] not in jbxxDic and jbxx[(i + 1) % len(jbxx)] not in jbxxDic:
@@ -128,9 +78,6 @@ class AnalyseDaya:
         jbxxDic['承诺办结时限'] = curComplete
         jbxxDic['承诺期限数字'] = 0 if '即办' in curComplete else int(re.findall(r'\d+', curComplete)[0])
 
-        impleCode = et.xpath('//*[@id="impleCode"]/@value')[0]
-        if impleCode == 'ff8080815e01f0b9015e0389183c0f904331400515002':
-            print(ic)
         # 具体地址
         address = ''.join([k.strip() for k in et.xpath('//span[contains(text(), "具体地址")]/..//span[@class="Cons"]/text()')])
         jbxxDic['具体地址'] = address
@@ -145,7 +92,6 @@ class AnalyseDaya:
 
         # 有表格的 办理环节，如果空就是不是表格形式
         applyLink = list(filter(lambda x: x.strip(), [''.join(x.split()) for x in et.xpath('//div[@class="bllc_con"]//td[1]//text()')]))
-        rowspan = et.xpath('//div[@class="bllc_con"]//td[1]/@rowspan')
         # print(rowspan)
         jbxxDic['办理环节'] = ''.join(applyLink)
         jbxxDic['办理环节数'] = len(applyLink) - 1
@@ -205,122 +151,114 @@ class AnalyseDaya:
         # provincelow = self.joinStrip(et.xpath('//*[contains(text(), "省级法律依据")]/following-sibling::*//text()'))
         # jbxxDic['省级法律依据'] = provincelow
 
-        isMaterialSplit = len(et.xpath('//*[@id="sbcl"]//div[@class="apply_material"]')) != 0
-
-        # 如果材料分情形，读取情形源码
-        materialInfo = {}
-        # if isMaterialSplit:
-        #     try:
-        #         with open('{}/../../数据/{}_material'.format(os.getcwd(), ic)) as fp:
-        #             et = etree.HTML(fp.read())
-        #
-        #     except:
-        #         print('{}没有材料\n', ic)
-        #
-        # materialInfo = self.materialProduce(et, ic, isMaterialSplit)
-        return jbxxDic, materialInfo
+        return jbxxDic
 
     def analyse(self):
-        df = pd.read_excel('test.xls', sheet_name='事项信息').fillna('')
+        df = pd.read_excel('test.xls', sheet_name='事项信息', dtype=str).fillna('')
         # df[['省级法律依据', '国家法律依据', '工作时间', '审批结果名称']] = df[['省级法律依据', '国家法律依据', '工作时间', '审批结果名称']].fillna('').astype(str)
+        df = df.drop(labels=df[df['事项名称'] == '无'].index)
         totRes = []
+        totalErrorDetails = []
+        errorDf = pd.DataFrame()    #一个一个error的df
+
         for index, row in df.iterrows():
-            if row['事项名称'] == '无':
-                continue
 
             error = ''
+            errorList = []
             idx = 1
             # 承诺办结时间为即办，办件类型必须为即办件，事项审查类型为即审即办
             if row['承诺办结时限'] == '即办':
                 if row['办件类型'] != '即办件' or row['事项审查类型'] != '即审即办':
                     error += '{}. 承诺办结时间为即办，办件类型必须为即办件，事项审查类型为即审即办\n'.format(idx)
                     idx += 1
+                    errorList.append({'ERROR_CODE': '办结时间和办件类型不对应', 'ERROR_DESCRIPTION': ' 承诺办结时间为即办，办件类型必须为即办件，事项审查类型为即审即办'})
+
             # 承诺办结时间非即办，办件类型必须为承诺件，事项审查类型为先审后批
             elif row['承诺办结时限'] != '即办':
                 if row['办件类型'] != '承诺件' or row['事项审查类型'] != '前审后批':
                     error += '{}. 承诺办结时间非即办，办件类型必须为承诺件，事项审查类型为前审后批\n'.format(idx)
                     idx += 1
-            # # 如审批结果名称为XX证则审批结果类型为出证办结
-            # if row['审批结果名称'].endswith('证'):
-            #     if row['审批结果类型'] != '出证办结':
-            #         error += '{}. 如审批结果名称为XX证则审批结果类型为出证办结\n'.format(idx)
-            #         idx += 1
-            # # 4.如审批结果名称为XX文则审批结果类型为出文办结
-            # if row['审批结果名称'].endswith('文'):
-            #     if row['审批结果类型'] != '出文办结':
-            #         error += '{}. 如审批结果名称为XX文则审批结果类型为出文办结\n'.format(idx)
-            #         idx += 1
-            # # 如审批结果名称为XX批复则审批结果类型为审批办结
-            # if row['审批结果名称'].endswith('批复'):
-            #     if row['审批结果类型'] != '审批办结':
-            #         error += '{}. 如审批结果名称为XX批复则审批结果类型为审批办结\n'.format(idx)
-            #         idx += 1
-            # modify by wencj start
-            # 2、如审批结果名称为XX批复则审批结果类型为审批办结
+                    errorList.append({'ERROR_CODE': '办结时间和办件类型不对应', 'ERROR_DESCRIPTION': '承诺办结时间非即办，办件类型必须为承诺件，事项审查类型为前审后批'})
+
+
             if '批复' in row['审批结果名称'] or '批文' in row['审批结果名称']:
                 if row['审批结果类型'] != '审批办结':
                     error += '{}. 如审批结果名称为XX批复则审批结果类型为审批办结\n'.format(idx)
                     idx += 1
+                    errorList.append({'ERROR_CODE': '审批结果名称和审批结果类型不对应', 'ERROR_DESCRIPTION': '如审批结果名称为XX批复则审批结果类型为审批办结'})
+
             # 2、如审批结果名称为XX证则审批结果类型为出证办结
             elif (row['审批结果名称'].endswith('证') or '证书' in row['审批结果名称']) and \
                     '凭证' not in row['审批结果名称'] and '证明' not in row['审批结果名称']:
                 if row['审批结果类型'] != '出证办结':
                     error += '{}. 如审批结果名称为XX证则审批结果类型为出证办结\n'.format(idx)
                     idx += 1
+                    errorList.append({'ERROR_CODE': '审批结果名称和审批结果类型不对应', 'ERROR_DESCRIPTION': '如审批结果名称为XX证则审批结果类型为出证办结'})
 
             # 2、如审批结果名称为XX文则审批结果类型为出文办结
             elif row['审批结果名称'].endswith('文') or ('文' in row['审批结果名称'] and '批文' not in row['审批结果名称']):
                 if row['审批结果类型'] != '出文办结':
                     error += '{}. 如审批结果名称为XX文则审批结果类型为出文办结\n'.format(idx)
                     idx += 1
+                    errorList.append({'ERROR_CODE': '审批结果名称和审批结果类型不对应', 'ERROR_DESCRIPTION': '如审批结果名称为XX文则审批结果类型为出文办结'})
+
             elif row['审批结果名称'] and row['审批结果名称'] != '无' and (not row['审批结果类型'] or row['审批结果类型'] == '无'):
                 error += '{}. 有审批结果一定要有审批结果类型\n'.format(idx)
                 idx += 1
-            # modify by wencj end
+                errorList.append({'ERROR_CODE': '无审批结果类型', 'ERROR_DESCRIPTION': '有审批结果一定要有审批结果类型'})
+
             # 到办事现场次数非0次事项需填写原因说明
             if row['到办事现场次数'] == '':
                 error += '{}. 需填写到现场次数\n'.format(idx)
                 idx += 1
+                errorList.append({'ERROR_CODE': '无到现场次数', 'ERROR_DESCRIPTION': '需填写到现场次数'})
             elif row['到办事现场次数'] != '0次':
-                if not row['必须现场办理原因说明']:
+                if not row['必须现场办理原因说明'] or row['必须现场办理原因说明'] == '无需到现场办理':
                     error += '{}. 到办事现场次数非0次事项需填写原因说明\n'.format(idx)
                     idx += 1
+                    errorList.append({'ERROR_CODE': '需要跑现场无说明', 'ERROR_DESCRIPTION': '到办事现场次数非0次事项需填写原因说明'})
+
             # 跑0次事项除非有特殊原因外不必填写原因说明
             elif row['到办事现场次数'] == '0次':
                 if (row['必须现场办理原因说明'] != '无' or row['必须现场办理原因说明'] != '') \
                         and ('现场' in row['必须现场办理原因说明'] and '无需现场' not in row['必须现场办理原因说明'] and row['必须现场办理原因说明'] != '无需到现场办理'):
                     error += '{}. 跑0次事项除非有特殊原因外不必填写原因说明\n'.format(idx)
                     idx += 1
+                    errorList.append({'ERROR_CODE': '跑零次事项不应有到现场办理原因说明', 'ERROR_DESCRIPTION': '跑0次事项除非有特殊原因外不必填写原因说明'})
 
             # 到现场办事次数为0次事项并且不支持网办事项，办理形式需支持快递收件
             if row['到办事现场次数'] == '0次':
                 if row['是否网办'] != '是' and '邮寄申请' not in row['办理形式']:
                     error += '{}. 到现场办事次数为0次事项并且不支持网办事项，办理形式需支持快递收件\n'.format(idx)
                     idx += 1
+                    errorList.append({'ERROR_CODE': '跑零次不支持网办事项需支持快递收件', 'ERROR_DESCRIPTION': '到现场办事次数为0次事项并且不支持网办事项，办理形式需支持快递收件'})
 
             # 网办深度四级到现场办事次数应为0次
             if row['网上办理深度'] == '全程网办（Ⅳ级）':
                 if row['到办事现场次数'] != '0次':
                     error += '{}. 网办深度四级到现场办事次数应为0次\n'.format(idx)
                     idx += 1
+                    errorList.append({'ERROR_CODE': '网办深度四级不应跑现场', 'ERROR_DESCRIPTION': '网办深度四级到现场办事次数应为0次'})
 
             # 是否收费为是，则需填写收费依据、是否支持网上支付、收费项目名称、收费标准
-            if row['是否收费'] == '是':
-                if not row['收费依据'] or not row['是否支持网上支付'] or not row['收费项目']:
-                    error += '{}. 是否收费为是，则需填写收费依据、是否支持网上支付、收费项目名称、收费标准\n'.format(idx)
-                    idx += 1
+            # if row['是否收费'] == '是':
+            #     if not row['收费依据'] or not row['是否支持网上支付'] or not row['收费项目']:
+            #         error += '{}. 是否收费为是，则需填写收费依据、是否支持网上支付、收费项目名称、收费标准\n'.format(idx)
+            #         idx += 1
 
             # 咨询电话和投诉电话不同且必须有，带区号0577
             if not row['咨询电话'] or not row['投诉电话'] or row['咨询电话'] == row['投诉电话'] or ('0577' not in row['咨询电话'] or '0577' not in row['投诉电话']):
                 error += '{}. 咨询电话和投诉电话不同且必须有，带区号0577\n'.format(idx)
                 idx += 1
+                errorList.append({'ERROR_CODE': '咨询电话和投诉电话相同或没有或没有带0577', 'ERROR_DESCRIPTION': '咨询电话和投诉电话不同且必须有，带区号0577'})
 
             # 工作时间要包括「夏、冬、工作日」
             # keyWords = ['夏', '冬', '工作日']
             keyWords = ['工作日']
-            if not reduce(lambda a, b: a & b, map(lambda key: key in row['工作时间'], keyWords)) and '全天' not in row['工作时间'] and '24小时' not in row['工作时间']:
+            if not reduce(lambda a, b: a & b, map(lambda key: key in row['工作时间'], keyWords)) and '全天' not in row['工作时间'] and '24小时' not in row['工作时间'] and '节假日' not in row['工作时间']:
                 error += '{}. 工作时间必须包含「工作日」关键字。参考模板：工作日，夏季：上午8：30-12:00，下午2:30-5:30；春、秋、冬季：上午8:30-12:00，下午2:00-5:00\n'.format(idx)
                 idx += 1
+                errorList.append({'ERROR_CODE': '工作时间不规范', 'ERROR_DESCRIPTION': '工作时间必须包含「工作日」关键字。参考模板：工作日，夏季：上午8：30-12:00，下午2:30-5:30；春、秋、冬季：上午8:30-12:00，下午2:00-5:00'})
 
 
             #办理地址要精确到窗口/门牌号
@@ -328,23 +266,16 @@ class AnalyseDaya:
             if not self.__isAddressAccurate(row['具体地址']):
                 error += '{}. 办理地址要精确到窗口/门牌号\n'.format(idx)
                 idx += 1
+                errorList.append({'ERROR_CODE': '办理地址不精确', 'ERROR_DESCRIPTION': '办理地址要精确到窗口/门牌号'})
 
             # 咨询和投诉地址不为空且不相等
             # if pd.isnull(row['咨询地址']) or pd.isnull(row['投诉地址']) or row['咨询地址'] == row['投诉地址']:
             #     error += '{}. 咨询和投诉地址不为空且不相等\n'.format(idx)
             #     idx += 1
             if not row['咨询地址'] or not row['投诉地址'] or row['咨询地址'] == '无' or row['投诉地址'] == '无':
-                error += '{}. 咨询和投诉地址不为空\n'.format(idx)
+                error += '{}. 咨询和投诉地址为空\n'.format(idx)
                 idx += 1
-            # else:
-            #     if not ('窗口' in row['咨询地址'] or '号' in row['咨询地址'] or '室' in row['咨询地址'] or '幢' in row['咨询地址']
-            #             or '楼' in row['咨询地址'] or '办公室' in row['咨询地址']):
-            #         error += '{}. 咨询地址需精确到门牌号或窗口号\n'.format(idx)
-            #         idx += 1
-            #     if not ('窗口' in row['投诉地址'] or '号' in row['投诉地址'] or '室' in row['投诉地址'] or '幢' in row['投诉地址']
-            #             or '楼' in row['投诉地址'] or '办公室' in row['投诉地址']):
-            #         error += '{}. 投诉地址需精确到门牌号或窗口号\n'.format(idx)
-            #         idx += 1
+                errorList.append({'ERROR_CODE': '咨询地址或投诉地址为空', 'ERROR_DESCRIPTION': '咨询和投诉地址为空'})
 
             # 服务对象需与主题分类一致。例如法人事项主题分类为法人，必须有法人主题，且自然人主题应为空。
             objects = row['服务对象'].split('/')
@@ -360,74 +291,66 @@ class AnalyseDaya:
             if res != 0:
                 error += '{}. 服务对象需与主题分类一致。例如法人事项主题分类为法人，必须有法人主题，且自然人主题应为空。\n'.format(idx)
                 idx += 1
+                errorList.append({'ERROR_CODE': '服务对象和主题分类不一致', 'ERROR_DESCRIPTION': '服务对象需与主题分类一致。例如法人事项主题分类为法人，必须有法人主题，且自然人主题应为空'})
 
             # 许可类事项一定要有一个常见问题
             if row['事项类型'] == '行政许可' and '暂无常见问题' in row['常见问题']:
                 error += '{}. 许可类事项一定要有一个常见问题\n'.format(idx)
                 idx += 1
+                errorList.append({'ERROR_CODE': '许可类事项“常见问题”栏目无内容', 'ERROR_DESCRIPTION': '许可类事项一定要有一个常见问题'})
 
             # 联系方式不为空且和投诉电话不相等，并且带0577
             if not row['联系方式'] or row['联系方式'] == row['投诉电话'] or '0577' not in row['联系方式']:
                 error += '{}. 联系方式不为空且和投诉电话不相等，并且带区号0577\n'.format(idx)
                 idx += 1
+                errorList.append({'ERROR_CODE': '联系电话为空或者和投诉电话相等', 'ERROR_DESCRIPTION': '联系方式不为空且和投诉电话不相等，并且带区号0577'})
 
             # 许可类事项环节可能存在异常（必须为表格且包含受理、审核、审批、办结、送达等环节）
             if row['办理环节数'] == -1 and row['事项类型'] == '行政许可':
                 error += '{}. 许可类事项办理流程必须为表格\n'.format(idx)
                 idx += 1
+                errorList.append({'ERROR_CODE': '办理流程不是表格形式', 'ERROR_DESCRIPTION': '许可类事项办理流程必须为表格'})
 
             #表格流程时间之和等于承诺期限，许可专用
-            if row['表格流程时间和'] > row['承诺期限数字'] and row['事项类型'] == '行政许可':
+            if int(row['表格流程时间和']) > int(row['承诺期限数字']) and row['事项类型'] == '行政许可':
                 error += '{}. 表格流程时间之和（受理、审核、审批、办结）不等于承诺期限\n'.format(idx)
                 idx += 1
+                errorList.append({'ERROR_CODE': '表格流程时间之和（受理、审核、审批、办结）不等于承诺期限', 'ERROR_DESCRIPTION': '表格流程时间之和（受理、审核、审批、办结）不等于承诺期限'})
 
             # 如果有审批结果就要有样本
             if row['审批结果名称'] != '无':
                 if row['审批结果样本'] != '有样本':
                     error += '{}. 如果有审批结果就要有样本\n'.format(idx)
                     idx += 1
+                    errorList.append({'ERROR_CODE': '无审批结果样本', 'ERROR_DESCRIPTION': '如果有审批结果就要有样本'})
+
             # 如果不收费，不能支持网上支付
             if row['是否收费'] == '不收费':
                 if row['是否支持网上支付'] == '支持':
                     error += '{}. 如果不收费，不能支持网上支付\n'.format(idx)
                     idx += 1
+                    errorList.append({'ERROR_CODE': '不收费但支持网上支付', 'ERROR_DESCRIPTION': '如果不收费，不能支持网上支付'})
 
-            # # 国家法律依据不能出现浙江省
-            # countryLow = row['国家法律依据']
-            # # lis = re.compile(r'《.*?》').findall(countryLow)
-            # if countryLow and countryLow not in ['无', '无相关法律依据', '无特定法律依据']:
-            #     # if reduce(lambda res1, res2: res1 | res2, map(lambda x: '浙江省' in x, lis), False):
-            #     if '浙江省' in countryLow:
-            #         error += '{}. 国家法律依据出现省级法律\n'.format(idx)
-            #         idx += 1
-            #
-            # # 省级法律依据一定要出现浙江省
-            # provinceLow = row['省级法律依据']
-            # if provinceLow and provinceLow not in ['无', '无相关法律依据', '无特定法律依据']:
-            #     lis = re.compile(r'《.*?》').findall(provinceLow)
-            #     if reduce(lambda res1, res2: res1 & res2, map(lambda x: '浙江省' not in x, lis), True):
-            #     # if '中华人民共和国' in provinceLow or '部令' in provinceLow or '总局令' in provinceLow \
-            #     #         or '国务院' in provinceLow or '主席令' in provinceLow and '浙江省实施' not in provinceLow:
-            #         error += '{}. 省级法律依据一定要有浙江省\n'.format(idx)
-            #         idx += 1
+
 
             error = error.strip()  #去除最后的换行
             totRes.append(error)
+            errorDf = errorDf.append(self.__splitErrors(errorList, row), ignore_index=True)
+
+
 
         df['错误情况'] = pd.Series(totRes)
-        oldDf = pd.read_excel(self.__analyseFilename, sheet_name='Sheet1', usecols=['权力内部编码', '部门名称', '权力基本码', '组织编码（即部门编码）'], dtype={'组织编码（即部门编码）': str})
-        oldDf['地区'] = oldDf['组织编码（即部门编码）'].apply(lambda e: self.regionMap(e))
-        df: pd.DataFrame = pd.merge(df, oldDf, left_on='内部编码', right_on='权力内部编码').drop(columns='内部编码')
-        df['事项地址'] = 'http://www.zjzwfw.gov.cn/zjservice/item/detail/index.do?localInnerCode=' + df['权力内部编码']
+
+        df['事项地址'] = 'http://www.zjzwfw.gov.cn/zjservice/item/detail/index.do?localInnerCode=' + df['内部编码']
         dep = df.pop('部门名称')
         df.insert(0, '部门名称', dep)
         # 得到一个总的表
         df.to_excel('total.xls', index=False)
-        singleDf = df.groupby('地区')
+        singleDf = df.groupby('区县')
         for name, d in singleDf:
             d.to_excel('{}{}错误情况.xls'.format(arrow.now().format('MMDD'), name), index=False)
 
-        # self.__generateTotalExcel(df)
+        errorDf.to_excel('errordf.xls', index=False)
 
     def analyseStatics(self):
         df = pd.read_excel('total.xls')
@@ -435,7 +358,6 @@ class AnalyseDaya:
     def __getTableSum(self, html):
         rows = len(html.xpath('//div[@class="bllc_con"]//tr'))
 
-        firstInclude = False
         keywords = ['受理', '审核', '审查', '核准', '决定', '办结', '审批', '制证', '签发']
         sum = 0
         for i in range(1, rows + 1):
@@ -467,9 +389,14 @@ class AnalyseDaya:
             if add[-1].isdigit():
                 return True
 
-
         return False
 
-a = AnalyseDaya()
+    def __splitErrors(self, lis:list, row:pd.Series):
+        appendLis = []
+        for e in lis:
+            appendLis.append({'AREA': row['区县'], 'DEPARTMENT': row['部门名称'], 'QL_BASIC_CODE': row['权力基本码'], 'MATTER_NAME': row['事项名称'], 'ERROR_CODE': e['ERROR_CODE'], 'ERROR_DESCRIPTION': e['ERROR_DESCRIPTION']})
+        return pd.DataFrame(appendLis)
+
+a = AnalyseData()
 a.run()
 a.analyse()
