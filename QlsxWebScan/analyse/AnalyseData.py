@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 class AnalyseData:
     # 要分析的事项列表xls
-    __analyseFilename = '../../事项表/0819全市许可.xls'
+    __analyseFilename = '../../事项表/0831total.xls'
     with open('部门编码地区映射', 'r', encoding='utf-8') as fp:
         __areaList = fp.readlines()
 
@@ -26,30 +26,27 @@ class AnalyseData:
         df = pd.read_excel(self.__analyseFilename, sheet_name='Sheet1', dtype=str).fillna('')
         df['区县'] = df['组织编码（即部门编码）'].apply(lambda e: self.regionMap(e))
         res1 = []
-        for idx, row in tqdm(df.iterrows(), ncols=100):
-            try:
-                with open('{}/../../数据/{}'.format(os.getcwd(), row['权力内部编码']), 'r', encoding='utf-8') as fp:
-                    tmp = fp.read()
-                    tmp = tmp.replace('<br>', '\n')
-                    et = etree.HTML(tmp)
-                    baseInfo = self.produce(et, row)
-                    res1.append(baseInfo)
-            except Exception as e:
+        with tqdm(total=df.shape[0], ncols=200) as pbar:
+            for idx, row in df.iterrows():
+                try:
+                    with open('{}/../../数据/{}'.format(os.getcwd(), row['权力内部编码']), 'r', encoding='utf-8') as fp:
+                        tmp = fp.read()
+                        tmp = tmp.replace('<br>', '\n')
+                        et = etree.HTML(tmp)
+                        baseInfo = self.produce(et, row)
+                        res1.append(baseInfo)
+                except Exception as e:
+                    pass
+                pbar.update(1)
 
-                traceback.print_exc()
-                print('{}有问题'.format(row['权力内部编码']))
-
-
-        ddf = pd.DataFrame(res1)
-        w = pd.ExcelWriter('test.xls')
-        ddf.to_excel(w, '事项信息', index=False)
-        w.save()
-        w.close()
+            ddf = pd.DataFrame(res1)
+            w = pd.ExcelWriter('test.xls')
+            ddf.to_excel(w, '事项信息', index=False)
+            w.save()
+            w.close()
 
     def joinStrip(self, lis):
         return ''.join([x.strip() for x in lis])
-
-
 
     def produce(self, et, row):
 
@@ -143,13 +140,13 @@ class AnalyseData:
         complainAddress = ''.join(et.xpath('//div[@class="jdtsfs"]//p[@class="zxdz clearfix"]/span[@class="jdtsfsCon"]//text()')).strip()
         jbxxDic['投诉地址'] = complainAddress
 
-        # 国家法律依据
-        # countryLow = self.joinStrip(et.xpath('//*[contains(text(), "国家法律依据")]/following-sibling::*//text()'))
-        # jbxxDic['国家法律依据'] = countryLow
+        #咨询网址
+        askLink = ''.join(et.xpath('//*[@id="zxfs"]/p[3]/a/@href'))
+        jbxxDic['咨询网址'] = askLink
 
-        # 省级法律依据
-        # provincelow = self.joinStrip(et.xpath('//*[contains(text(), "省级法律依据")]/following-sibling::*//text()'))
-        # jbxxDic['省级法律依据'] = provincelow
+        #投诉网址
+        complainLink = ''.join(et.xpath('//*[@id="jdtsfs"]/p[3]/a/@href'))
+        jbxxDic['投诉网址'] = complainLink
 
         return jbxxDic
 
