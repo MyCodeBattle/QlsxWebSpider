@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 class AnalyseData:
     # 要分析的事项列表xls
-    __analyseFilename = '../../事项表/0831total.xls'
+    __analyseFilename = '../../事项表/0819全市许可.xls'
     with open('部门编码地区映射', 'r', encoding='utf-8') as fp:
         __areaList = fp.readlines()
 
@@ -155,7 +155,6 @@ class AnalyseData:
         # df[['省级法律依据', '国家法律依据', '工作时间', '审批结果名称']] = df[['省级法律依据', '国家法律依据', '工作时间', '审批结果名称']].fillna('').astype(str)
         df = df.drop(labels=df[df['事项名称'] == '无'].index)
         totRes = []
-        totalErrorDetails = []
         errorDf = pd.DataFrame()    #一个一个error的df
 
         for index, row in df.iterrows():
@@ -285,6 +284,9 @@ class AnalyseData:
                 res ^= 1
             if row['法人主题分类'] not in ['无', '不涉及']:
                 res ^= 1
+
+            if '(允许个人代办)' in objects:   #代办就不判断这个错了
+                res = 0
             if res != 0:
                 error += '{}. 服务对象需与主题分类一致。例如法人事项主题分类为法人，必须有法人主题，且自然人主题应为空。\n'.format(idx)
                 idx += 1
@@ -342,7 +344,7 @@ class AnalyseData:
         dep = df.pop('部门名称')
         df.insert(0, '部门名称', dep)
         # 得到一个总的表
-        df = df[['地区', '部门名称', '事项名称', '事项类型', '权力基本码', '权力内部编码', '事项地址', '错误情况']]
+        df = df[['区县', '部门名称', '事项名称', '事项类型', '权力基本码', '内部编码', '事项地址', '错误情况']]
         df.to_excel('total.xls', index=False)
         singleDf = df.groupby('区县')
         for name, d in singleDf:
@@ -363,7 +365,12 @@ class AnalyseData:
             selected = reduce(lambda a, b: a | b, [k in procedure for k in keywords], False)
             if selected:
                 curTime = ''.join(html.xpath('//div[@class="bllc_con"]//tr[{}]/td[2]//text()'.format(i)))
-                workDays = re.findall(r'\d\.*\d*', curTime)
+
+                #判断是否第二列是时间
+                if not '即办' in curTime and not '工作日' in curTime:
+                    curTime = ''.join(html.xpath('//div[@class="bllc_con"]//tr[{}]/td[3]//text()'.format(i)))
+
+                workDays = re.search(r'(\d\.*\d*)工作日', curTime)
                 if '不包含在承诺办结时限内' in curTime or '不属于市级承诺时间范围' in curTime:
                     continue
                 if '即办' in curTime:
@@ -371,8 +378,7 @@ class AnalyseData:
                 if '包含' in curTime:
                     continue
                 elif workDays:
-                    sum += float(workDays[0])
-
+                    sum += float(workDays.group(1))
         return int(sum)
 
     def __isAddressAccurate(self, row):
@@ -392,7 +398,7 @@ class AnalyseData:
     def __splitErrors(self, lis:list, row:pd.Series):
         appendLis = []
         for e in lis:
-            appendLis.append({'AREA': row['区县'], 'DEPARTMENT': row['部门名称'], 'QL_BASIC_CODE': row['权力基本码'], 'MATTER_NAME': row['事项名称'], 'ERROR_CODE': e['ERROR_CODE'], 'ERROR_DESCRIPTION': e['ERROR_DESCRIPTION']})
+            appendLis.append({'AREA': row['区县'], 'DEPARTMENT': row['部门名称'], 'QL_BASIC_CODE': row['权力基本码'], 'MATTER_NAME': row['事项名称'], 'ERROR_CODE': e['ERROR_CODE'], 'ERROR_DESCRIPTION': e['ERROR_DESCRIPTION'], 'QL_INNER_CODE': row['内部编码']})
         return pd.DataFrame(appendLis)
 
 a = AnalyseData()
