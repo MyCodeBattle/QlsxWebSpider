@@ -342,6 +342,7 @@ class AnalyseData:
         dep = df.pop('部门名称')
         df.insert(0, '部门名称', dep)
         # 得到一个总的表
+        df = df[['地区', '部门名称', '事项名称', '事项类型', '权力基本码', '权力内部编码', '事项地址', '错误情况']]
         df.to_excel('total.xls', index=False)
         singleDf = df.groupby('区县')
         for name, d in singleDf:
