@@ -11,9 +11,12 @@ from tqdm import tqdm
 
 class AnalyseData:
     # 要分析的事项列表xls
-    __analyseFilename = '../../事项表/0819全市许可.xls'
-    with open('部门编码地区映射', 'r', encoding='utf-8') as fp:
-        __areaList = fp.readlines()
+    __analyseFilename = '../../事项表/0831total.xls'
+
+    def __init__(self, filename):
+        with open('部门编码地区映射', 'r', encoding='utf-8') as fp:
+            self.__areaList = fp.readlines()
+        self.__analyseFilename = filename
 
     def regionMap(self, code: str):
 
@@ -61,7 +64,6 @@ class AnalyseData:
         jbxxDic = {'内部编码': row['权力内部编码'], '部门名称': row['部门名称'], '部门编码': row['组织编码（即部门编码）'], '事项名称': row['权力名称'], '权力基本码': row['权力基本码'], '区县': row['区县']}
 
         for i in range(0, len(jbxx), 2):
-            # print('{} {}\n'.format(jbxx[i], jbxx[i+1]))
             if jbxx[i] not in jbxxDic and jbxx[(i + 1) % len(jbxx)] not in jbxxDic:
                 jbxxDic[jbxx[i]] = jbxx[(i + 1) % len(jbxx)]
 
@@ -89,11 +91,9 @@ class AnalyseData:
 
         # 有表格的 办理环节，如果空就是不是表格形式
         applyLink = list(filter(lambda x: x.strip(), [''.join(x.split()) for x in et.xpath('//div[@class="bllc_con"]//td[1]//text()')]))
-        # print(rowspan)
         jbxxDic['办理环节'] = ''.join(applyLink)
         jbxxDic['办理环节数'] = len(applyLink) - 1
-        # print(applyLink)
-        
+
         #表格里的时间和承诺时间对比
         tableSum = self.__getTableSum(et)
         jbxxDic['表格流程时间和'] = tableSum
@@ -101,12 +101,10 @@ class AnalyseData:
 
         # 是否收费
         needMoney = ''.join(et.xpath('//div[@class="sfsf"]//div[@class="sfyjCon"]//text()')).strip()
-        # print(needMoney)
         jbxxDic['是否收费'] = needMoney
 
         # 收费依据
         chargeTicket = ''.join(et.xpath('//div[@class="sfyj"]//div[@class="sfyjCon"]//text()')).strip()
-        # print(chargeTicket)
         jbxxDic['收费依据'] = chargeTicket
 
         # 是否支持网上支付
@@ -118,14 +116,12 @@ class AnalyseData:
         jbxxDic['收费项目'] = chargeItems
         # 常见问题
         faq = reduce(lambda x, y: x + y, map(lambda x: x.strip(), et.xpath('//div[@class="cjwt_table"]//text()')), '')
-        # print(faq)
         jbxxDic['常见问题'] = faq
 
         # 咨询电话
         askPhone = ''.join(et.xpath('//div[@class="zxfs"]//p[@class="zxdh clearfix"]/span[@class="zxfsCon"]//text()')).strip()
         jbxxDic['咨询电话'] = askPhone
 
-        # print(askPhone)
 
         # 咨询地址
         askAddress = ''.join(et.xpath('//div[@class="zxfs"]//p[@class="zxdz clearfix"]/span[@class="zxfsCon"]//text()')).strip()
@@ -133,7 +129,6 @@ class AnalyseData:
 
         # 投诉电话
         complainPhone = ''.join(et.xpath('//div[@class="jdtsfs"]//p[@class="zxdh clearfix"]/span[@class="jdtsfsCon"]//text()')).strip()
-        # print(complainPhone)
         jbxxDic['投诉电话'] = complainPhone
 
         # 投诉地址
@@ -260,9 +255,9 @@ class AnalyseData:
             #办理地址要精确到窗口/门牌号
             #按括号为分界split，判断各个部分有没有
             if not self.__isAddressAccurate(row['具体地址']):
-                error += '{}. 办理地址要精确到窗口/门牌号\n'.format(idx)
+                error += '{}. 办理地址要精确到窗口/房间号\n'.format(idx)
                 idx += 1
-                errorList.append({'ERROR_CODE': '办理地址不精确', 'ERROR_DESCRIPTION': '办理地址要精确到窗口/门牌号'})
+                errorList.append({'ERROR_CODE': '办理地址不精确', 'ERROR_DESCRIPTION': '办理地址要精确到窗口/房间号'})
 
             # 咨询和投诉地址不为空且不相等
             # if pd.isnull(row['咨询地址']) or pd.isnull(row['投诉地址']) or row['咨询地址'] == row['投诉地址']:
@@ -356,21 +351,24 @@ class AnalyseData:
         df = pd.read_excel('total.xls')
 
     def __getTableSum(self, html):
-        rows = len(html.xpath('//div[@class="bllc_con"]//tr'))
+        rows = len(html.xpath('//div[@class="bllc_con"]//table[1]//tr'))
 
         keywords = ['受理', '审核', '审查', '核准', '决定', '办结', '审批', '制证', '签发']
         sum = 0
         for i in range(1, rows + 1):
-            procedure = ''.join(html.xpath('//div[@class="bllc_con"]//tr[{}]/td[1]//text()'.format(i)))
+            procedure = ''.join(html.xpath('//div[@class="bllc_con"]//table[1]//tr[{}]/td[1]//text()'.format(i)))
             selected = reduce(lambda a, b: a | b, [k in procedure for k in keywords], False)
             if selected:
-                curTime = ''.join(html.xpath('//div[@class="bllc_con"]//tr[{}]/td[2]//text()'.format(i)))
+                curTime = ''.join(html.xpath('//div[@class="bllc_con"]//table[1]//tr[{}]/td[2]//text()'.format(i)))
 
                 #判断是否第二列是时间
                 if not '即办' in curTime and not '工作日' in curTime:
-                    curTime = ''.join(html.xpath('//div[@class="bllc_con"]//tr[{}]/td[3]//text()'.format(i)))
+                    curTime = ''.join(html.xpath('//div[@class="bllc_con"]//table[1]//tr[{}]/td[3]//text()'.format(i)))
 
-                workDays = re.search(r'(\d\.*\d*)工作日', curTime)
+                workDays = re.search(r'(\d\.*\d*)个*工作日', curTime)
+                if len(curTime) > 30:  #太长了，不是描述时间的
+                    continue
+
                 if '不包含在承诺办结时限内' in curTime or '不属于市级承诺时间范围' in curTime:
                     continue
                 if '即办' in curTime:
@@ -392,6 +390,8 @@ class AnalyseData:
                 return True
             if add[-1].isdigit():
                 return True
+            if add[-1] == '处':
+                return True
 
         return False
 
@@ -401,6 +401,6 @@ class AnalyseData:
             appendLis.append({'AREA': row['区县'], 'DEPARTMENT': row['部门名称'], 'QL_BASIC_CODE': row['权力基本码'], 'MATTER_NAME': row['事项名称'], 'ERROR_CODE': e['ERROR_CODE'], 'ERROR_DESCRIPTION': e['ERROR_DESCRIPTION'], 'QL_INNER_CODE': row['内部编码']})
         return pd.DataFrame(appendLis)
 
-a = AnalyseData()
+a = AnalyseData('../../事项表/0903市公安局.xlsx')
 a.run()
 a.analyse()
