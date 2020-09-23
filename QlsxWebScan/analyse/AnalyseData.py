@@ -5,18 +5,25 @@ import os
 from functools import reduce
 import pandas as pd
 import arrow
-import traceback
+from concurrent.futures import *
 from tqdm import tqdm
 
 
 class AnalyseData:
     # 要分析的事项列表xls
-    __analyseFilename = '../../事项表/0831total.xls'
+    __analyseFilename = '../../事项表/totalQlsx.xls'
 
     def __init__(self, filename):
         with open('部门编码地区映射', 'r', encoding='utf-8') as fp:
             self.__areaList = fp.readlines()
         self.__analyseFilename = filename
+        self.__contentDict = {}
+
+    def isChinese(self, word):
+        for ch in word:
+            if '\u4e00' <= ch <= '\u9fff':
+                return True
+        return False
 
     def regionMap(self, code: str):
 
@@ -25,19 +32,27 @@ class AnalyseData:
             if code.startswith(tmp[1].strip()):
                 return tmp[0]
 
+    def __read(self, ic):
+        with open('{}/../../数据/{}'.format(os.getcwd(), ic), 'r', encoding='utf-8') as fp:
+            self.__contentDict[ic] = fp.read().replace('<br>', '\n')
+
     def run(self):
         df = pd.read_excel(self.__analyseFilename, sheet_name='Sheet1', dtype=str).fillna('')
         df['区县'] = df['组织编码（即部门编码）'].apply(lambda e: self.regionMap(e))
         res1 = []
+
+        with ThreadPoolExecutor(10) as pool:
+            with tqdm(total=df.shape[0], ncols=200) as pbar:
+                for idx, row in df.iterrows():
+                    pool.submit(self.__read, row['权力内部编码'])
+                    pbar.update(1)
+        print(len(self.__contentDict))
         with tqdm(total=df.shape[0], ncols=200) as pbar:
             for idx, row in df.iterrows():
                 try:
-                    with open('{}/../../数据/{}'.format(os.getcwd(), row['权力内部编码']), 'r', encoding='utf-8') as fp:
-                        tmp = fp.read()
-                        tmp = tmp.replace('<br>', '\n')
-                        et = etree.HTML(tmp)
-                        baseInfo = self.produce(et, row)
-                        res1.append(baseInfo)
+                    et = etree.HTML(self.__contentDict[row['权力内部编码']])
+                    baseInfo = self.produce(et, row)
+                    res1.append(baseInfo)
                 except Exception as e:
                     pass
                 pbar.update(1)
@@ -171,29 +186,31 @@ class AnalyseData:
                     idx += 1
                     errorList.append({'ERROR_CODE': '办结时间和办件类型不对应', 'ERROR_DESCRIPTION': '承诺办结时间非即办，办件类型必须为承诺件，事项审查类型为前审后批'})
 
-
-            if '批复' in row['审批结果名称'] or '批文' in row['审批结果名称']:
+            spResult = row['审批结果名称']
+            while spResult and not self.isChinese(spResult[-1]):
+                spResult = spResult[:-1]
+            if '批复' in spResult or '批文' in spResult:
                 if row['审批结果类型'] != '审批办结':
                     error += '{}. 如审批结果名称为XX批复则审批结果类型为审批办结\n'.format(idx)
                     idx += 1
                     errorList.append({'ERROR_CODE': '审批结果名称和审批结果类型不对应', 'ERROR_DESCRIPTION': '如审批结果名称为XX批复则审批结果类型为审批办结'})
 
             # 2、如审批结果名称为XX证则审批结果类型为出证办结
-            elif (row['审批结果名称'].endswith('证') or '证书' in row['审批结果名称']) and \
-                    '凭证' not in row['审批结果名称'] and '证明' not in row['审批结果名称']:
+            elif (spResult.endswith('证') or '证书' in spResult) and \
+                    '凭证' not in spResult and '证明' not in spResult:
                 if row['审批结果类型'] != '出证办结':
                     error += '{}. 如审批结果名称为XX证则审批结果类型为出证办结\n'.format(idx)
                     idx += 1
                     errorList.append({'ERROR_CODE': '审批结果名称和审批结果类型不对应', 'ERROR_DESCRIPTION': '如审批结果名称为XX证则审批结果类型为出证办结'})
 
             # 2、如审批结果名称为XX文则审批结果类型为出文办结
-            elif row['审批结果名称'].endswith('文') or ('文' in row['审批结果名称'] and '批文' not in row['审批结果名称']):
+            elif spResult.endswith('文') or ('文' in spResult and '批文' not in spResult):
                 if row['审批结果类型'] != '出文办结':
                     error += '{}. 如审批结果名称为XX文则审批结果类型为出文办结\n'.format(idx)
                     idx += 1
                     errorList.append({'ERROR_CODE': '审批结果名称和审批结果类型不对应', 'ERROR_DESCRIPTION': '如审批结果名称为XX文则审批结果类型为出文办结'})
 
-            elif row['审批结果名称'] and row['审批结果名称'] != '无' and (not row['审批结果类型'] or row['审批结果类型'] == '无'):
+            elif spResult and spResult not in ['无', '无特定审批结果'] and (not row['审批结果类型'] or row['审批结果类型'] == '无'):
                 error += '{}. 有审批结果一定要有审批结果类型\n'.format(idx)
                 idx += 1
                 errorList.append({'ERROR_CODE': '无审批结果类型', 'ERROR_DESCRIPTION': '有审批结果一定要有审批结果类型'})
@@ -312,7 +329,7 @@ class AnalyseData:
                 errorList.append({'ERROR_CODE': '表格流程时间之和（受理、审核、审批、办结）不等于承诺期限', 'ERROR_DESCRIPTION': '表格流程时间之和（受理、审核、审批、办结）不等于承诺期限'})
 
             # 如果有审批结果就要有样本
-            if row['审批结果名称'] != '无':
+            if row['审批结果名称'] not in ['无', '无特定审批结果']:
                 if row['审批结果样本'] != '有样本':
                     error += '{}. 如果有审批结果就要有样本\n'.format(idx)
                     idx += 1
@@ -380,17 +397,18 @@ class AnalyseData:
         return int(sum)
 
     def __isAddressAccurate(self, row):
-        dealAddress: List[str] = row.replace('（', '#').replace('）', '#').split('#')
+        dealAddress: List[str] = row.replace('（', '#').replace('）', '#').replace('(', '#').replace(')', '#').split('#')
         for add in dealAddress:
+            add = add.strip()
             if not add:
                 continue
-            if '窗口' in add or '室' in add or '专区' in add or '中台' in add:
+            if '窗口' in add or '室' in add or '专区' in add or '中台' in add or '房间' in add:
                 return True
             if re.search(r'[A-Z].*区.*\d', add):
                 return True
             if add[-1].isdigit():
                 return True
-            if add[-1] == '处':
+            if add[-1] in['处', '科', '股']:
                 return True
 
         return False
@@ -401,6 +419,10 @@ class AnalyseData:
             appendLis.append({'AREA': row['区县'], 'DEPARTMENT': row['部门名称'], 'QL_BASIC_CODE': row['权力基本码'], 'MATTER_NAME': row['事项名称'], 'ERROR_CODE': e['ERROR_CODE'], 'ERROR_DESCRIPTION': e['ERROR_DESCRIPTION'], 'QL_INNER_CODE': row['内部编码']})
         return pd.DataFrame(appendLis)
 
-a = AnalyseData('../../事项表/0903市公安局.xlsx')
+    def temp(self):
+        print(self.__isAddressAccurate('龙港市农业农村局林业科(龙港市江滨路184号)'))
+
+a = AnalyseData('../../事项表/totalQlsx.xls')
 a.run()
 a.analyse()
+
