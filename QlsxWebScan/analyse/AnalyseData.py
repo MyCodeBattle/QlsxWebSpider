@@ -38,6 +38,7 @@ class AnalyseData:
 
     def run(self):
         df = pd.read_excel(self.__analyseFilename, sheet_name='Sheet1', dtype=str).fillna('')
+        df = df[df['权力基本码'].str.contains('许可')]
         df['区县'] = df['组织编码（即部门编码）'].apply(lambda e: self.regionMap(e))
         res1 = []
 
@@ -229,7 +230,7 @@ class AnalyseData:
             # 跑0次事项除非有特殊原因外不必填写原因说明
             elif row['到办事现场次数'] == '0次':
                 if (row['必须现场办理原因说明'] != '无' or row['必须现场办理原因说明'] != '') \
-                        and ('现场' in row['必须现场办理原因说明'] and '无需现场' not in row['必须现场办理原因说明'] and row['必须现场办理原因说明'] != '无需到现场办理'):
+                        and ('无需现场' not in row['必须现场办理原因说明'] and row['必须现场办理原因说明'] != '无需到现场办理'):
                     error += '{}. 跑0次事项除非有特殊原因外不必填写原因说明\n'.format(idx)
                     idx += 1
                     errorList.append({'ERROR_CODE': '跑零次事项不应有到现场办理原因说明', 'ERROR_DESCRIPTION': '跑0次事项除非有特殊原因外不必填写原因说明'})
@@ -292,9 +293,9 @@ class AnalyseData:
                 res ^= 1
             if '个人' in objects:
                 res ^= 1
-            if row['自然人主题分类'] not in ['无', '不涉及']:
+            if row['自然人主题分类'] not in ['无', '不涉及', '']:
                 res ^= 1
-            if row['法人主题分类'] not in ['无', '不涉及']:
+            if row['法人主题分类'] not in ['无', '不涉及', '']:
                 res ^= 1
 
             if '(允许个人代办)' in objects:   #代办就不判断这个错了

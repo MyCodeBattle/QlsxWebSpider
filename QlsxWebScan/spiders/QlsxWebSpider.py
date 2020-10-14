@@ -33,9 +33,10 @@ class QlsxWebSpider(scrapy.Spider):
 
 
     def start_requests(self):
-        crawlFilename = '{}/事项表/0831total.xls'.format(os.getcwd())
-        df = pd.read_excel(os.path.join(os.getcwd(), crawlFilename), sheet_name='Sheet1')
-        for ic in df['权力内部编码']:
+        crawlFilename = '{}/事项表/total.xls'.format(os.getcwd())
+        df = pd.read_excel(os.path.join(os.getcwd(), crawlFilename), sheet_name='Sheet1', dtype=str).fillna('')
+        df = df[df['错误情况'] != '']
+        for ic in df['内部编码']:
             ## -------------------------------------------------#
             # if ic != 'cef8e360-d18d-4928-a977-1778e1fb58a5':
             #     continue
