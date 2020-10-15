@@ -25,10 +25,12 @@ class QlsxAnalyse:
             row = row.replace(r'工作日|天|即办', '', regex=True).replace('', '0').replace('无期限', '99999')
 
             if '月' in row['法定期限']:
-                row = row.replace('月', '', regex=True).astype('float') * 22
+                row = row.replace('月', '', regex=True)
+                row['法定期限'] = float(row['法定期限'])*22
 
             elif '年' in row['法定期限']:
-                row = row.replace('年', '', regex=True).astype('float') * 253
+                row = row.replace('年', '', regex=True)
+                row['法定期限'] = float(row['法定期限'])*250
 
             row = row.astype('float')
             tempDf = tempDf.append(row)
@@ -64,7 +66,8 @@ class QlsxAnalyse:
     def run(self):
 
         df = self.__clean(pd.read_excel('totalQlsx.xls', dtype=str).fillna(''))
-        df = df[df['权力基本码'].str.contains('许可|确认|给付|其他|裁决|奖励')] #依申请事项
+        df = df[df['权力基本码'].str.contains('许可')] #依申请事项
+        df.to_excel('检测数据.xls', index=False)
         df['区县'] = df['组织编码（即部门编码）'].apply(lambda e: self.__regionMap(e))
 
         totalDf = pd.DataFrame(columns=['区县'] + self.__targets) #全部汇总表
