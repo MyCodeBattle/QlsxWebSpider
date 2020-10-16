@@ -10,6 +10,7 @@ class QlsxAnalyse:
 
         self.__targets = ['事项总数', '网上可办事项数', '网上可办率', '掌上可办事项数', '掌上可办率', '即办事项数', '即办率', '承诺时限压缩比', '跑零次事项数', '跑零次率']
 
+        self.__whiteDf = pd.read_excel('不宜跑零次.xlsx')
     def __regionMap(self, code: str):
 
         for c in self.__areaList:
@@ -59,7 +60,11 @@ class QlsxAnalyse:
 
         # 跑零次
         paolingciNum = df[df['办事者到办事地点最少次数'] == '0'].shape[0]
-        paolingci = df[df['办事者到办事地点最少次数'] == '0'].shape[0] / baseNum
+        allowLis = df[(df['办事者到办事地点最少次数'] != '0') & (df['权力基本码'].isin(self.__whiteDf['权力基本码']))]
+        try:
+            paolingci = df[df['办事者到办事地点最少次数'] == '0'].shape[0] / (baseNum - allowLis.shape[0])
+        except Exception as e:
+            paolingci = 1
 
         return {'网上可办率': wangban, '掌上可办率': zhangban, '即办率': jiban, '承诺时限压缩比': yasuobi, '跑零次率': paolingci, '网上可办事项数': wangbanNum, '掌上可办事项数': zhangbanNum, '即办事项数': jibanNum, '跑零次事项数': paolingciNum, '事项总数': baseNum}
 
