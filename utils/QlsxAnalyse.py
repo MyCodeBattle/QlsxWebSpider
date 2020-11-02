@@ -8,7 +8,7 @@ class QlsxAnalyse:
         with open('部门编码地区映射', 'r', encoding='utf-8') as fp:
             self.__areaList = fp.readlines()
 
-        self.__targets = ['事项总数', '网上可办事项数', '网上可办率', '掌上可办事项数', '掌上可办率', '即办事项数', '即办率', '承诺时限压缩比', '跑零次事项数', '跑零次率']
+        self.__targets = ['事项总数', '网上可办事项数', '网上可办率（100%）', '掌上可办事项数', '掌上可办率（98%）', '即办事项数', '即办率（60%）', '承诺时限压缩比（91%）', '跑零次事项数', '跑零次率（99.5%）']
 
         self.__whiteDf = pd.read_excel('不宜跑零次.xlsx')
     def __regionMap(self, code: str):
@@ -53,7 +53,7 @@ class QlsxAnalyse:
         jiban = df[df['承诺数字'] == 0].shape[0] / baseNum
 
         # 压缩比
-        yasuobiDf = df[df['法定期限'] != '无期限']
+        yasuobiDf = df[(df['法定期限'] != '无期限') & (df['承诺期限'] != '无期限')]
         lawTotal = yasuobiDf['法定数字'].sum()
         actuallyTotal = yasuobiDf['承诺数字'].sum()
         yasuobi = (lawTotal - actuallyTotal) / lawTotal
@@ -103,10 +103,16 @@ class QlsxAnalyse:
         totalDf.to_excel(writer, sheet_name='汇总', index=False)
         writer.save()
 
-        # targets = ['网上可办率', '掌上可办率', '即办率', '承诺时限压缩比', '跑零次率']
-        # outDf = pd.DataFrame(columns=['区县'] + targets)
+    def dataHighlight(self, val):
+        print(111)
+        return {'color: red'}
+
+    def highlight(self):
+        dfs = pd.read_excel('1102全市依申请政务服务指标.xls', sheet_name='汇总')
+        dfs.apply(self.dataHighlight)
 
 
 
 a = QlsxAnalyse()
-a.run()
+# a.run()
+a.highlight()

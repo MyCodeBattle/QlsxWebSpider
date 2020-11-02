@@ -1,5 +1,6 @@
 from lxml import etree
 import re
+import re
 from typing import List
 import os
 from functools import reduce
@@ -7,11 +8,12 @@ import pandas as pd
 import arrow
 from concurrent.futures import *
 from tqdm import tqdm
+import traceback
 
 
 class AnalyseData:
     # 要分析的事项列表xls
-    __analyseFilename = '../../事项表/totalQlsx.xls'
+    __analyseFilename = '../../事项表/totalQlsx.xlsx'
 
     def __init__(self, filename):
         with open('部门编码地区映射', 'r', encoding='utf-8') as fp:
@@ -47,7 +49,6 @@ class AnalyseData:
                 for idx, row in df.iterrows():
                     pool.submit(self.__read, row['权力内部编码'])
                     pbar.update(1)
-        print(len(self.__contentDict))
         with tqdm(total=df.shape[0], ncols=200) as pbar:
             for idx, row in df.iterrows():
                 try:
@@ -55,10 +56,13 @@ class AnalyseData:
                     baseInfo = self.produce(et, row)
                     res1.append(baseInfo)
                 except Exception as e:
-                    pass
+                    print(row['权力内部编码'])
+                    # print(e)
+                    traceback.print_exc()
                 pbar.update(1)
 
             ddf = pd.DataFrame(res1)
+            print(ddf.columns)
             w = pd.ExcelWriter('test.xls')
             ddf.to_excel(w, '事项信息', index=False)
             w.save()
@@ -68,45 +72,40 @@ class AnalyseData:
         return ''.join([x.strip() for x in lis])
 
     def produce(self, et, row):
-
-        jbxx = list(filter(lambda x: x not in ['事项信息', '办事信息', '结果信息'], map(lambda x: x.strip(), et.xpath('//div[@class="jbxx_tables"]//td/div/text()'))))
-        newJbxx = []
-        for i in range(0, len(jbxx) - 1):
-            if jbxx[i] != jbxx[i + 1]:
-                newJbxx.append(jbxx[i])
-        jbxx = newJbxx
-
-        #组装基本信息
         jbxxDic = {'内部编码': row['权力内部编码'], '部门名称': row['部门名称'], '部门编码': row['组织编码（即部门编码）'], '事项名称': row['权力名称'], '权力基本码': row['权力基本码'], '区县': row['区县']}
 
-        for i in range(0, len(jbxx), 2):
-            if jbxx[i] not in jbxxDic and jbxx[(i + 1) % len(jbxx)] not in jbxxDic:
-                jbxxDic[jbxx[i]] = jbxx[(i + 1) % len(jbxx)]
+        attrs = ['事项名称', '事项类型', '服务对象', '办件类型', '到办事现场次数', '网上办理深度', '必须现场办理原因说明', '事项审查类型', '自然人主题分类', '法人主题分类', '是否网办', '办理形式', '审批结果类型', '审批结果名称', '是否支持物流快递', '送达时限', '送达方式']
+        for attr in attrs:
+            jbxxDic[attr] = self.joinStrip(et.xpath('//td[@class="zjzw-procedure-tabItem-name" and contains(text(), "{}")]//following-sibling::*[1]//text()'.format(attr)))
+
+
+        # #组装基本信息
 
         if et.xpath('//a[contains(text(),"样本下载")]'):
             jbxxDic['审批结果样本'] = '有样本'
-        # 法定办结时限和承诺办结期限
-        totalCompleteTime = et.xpath('//table[@id="table1"]//div[contains(text(), "法定办结时限")]/../..//span/text()')
-        lowComplete = totalCompleteTime[0].strip()
-        curComplete = totalCompleteTime[1].strip()
-        jbxxDic['法定办结时限'] = lowComplete
+        # # 法定办结时限和承诺办结期限
+        lawComplete = et.xpath('//p[contains(text(), "法定办结时限")]/../span//text()')[0].strip()
+        curComplete = et.xpath('//p[contains(text(), "承诺办结时限")]/../span//text()')[0].strip()
+        jbxxDic['法定办结时限'] = lawComplete
         jbxxDic['承诺办结时限'] = curComplete
         jbxxDic['承诺期限数字'] = 0 if '即办' in curComplete else int(re.findall(r'\d+', curComplete)[0])
 
         # 具体地址
-        address = ''.join([k.strip() for k in et.xpath('//span[contains(text(), "具体地址")]/..//span[@class="Cons"]/text()')])
+        address = ''.join([k.strip() for k in et.xpath('//strong[contains(text(), "具体地址")]/..//span/text()')])
         jbxxDic['具体地址'] = address
 
+
         # 工作时间
-        workTime = ''.join([k.strip() for k in et.xpath('//span[contains(text(), "办理时间")]/..//span[@class="Cons"]/text()')])
+        workTime = ''.join([k.strip() for k in et.xpath('//strong[contains(text(), "办理时间")]/..//span/text()')])
         jbxxDic['工作时间'] = workTime
 
         # 联系方式
-        phone = ''.join([k.strip() for k in et.xpath('//span[contains(text(), "联系电话")]/..//span[@class="Cons"]/text()')])
+        phone = ''.join([k.strip() for k in et.xpath('//strong[contains(text(), "联系电话")]/..//span/text()')])
         jbxxDic['联系方式'] = phone
 
         # 有表格的 办理环节，如果空就是不是表格形式
-        applyLink = list(filter(lambda x: x.strip(), [''.join(x.split()) for x in et.xpath('//div[@class="bllc_con"]//td[1]//text()')]))
+        applyLink = list(filter(lambda x: x.strip(), [''.join(x.split()) for x in et.xpath('//div[@class="Process-flow-table"]//td[1]//text()')]))
+
         jbxxDic['办理环节'] = ''.join(applyLink)
         jbxxDic['办理环节数'] = len(applyLink) - 1
 
@@ -114,51 +113,45 @@ class AnalyseData:
         tableSum = self.__getTableSum(et)
         jbxxDic['表格流程时间和'] = tableSum
 
-
         # 是否收费
-        needMoney = ''.join(et.xpath('//div[@class="sfsf"]//div[@class="sfyjCon"]//text()')).strip()
+        needMoney = ''.join(et.xpath('//strong[contains(text(), "是否收费")]/..//span/text()')).strip()
         jbxxDic['是否收费'] = needMoney
 
         # 收费依据
-        chargeTicket = ''.join(et.xpath('//div[@class="sfyj"]//div[@class="sfyjCon"]//text()')).strip()
+        chargeTicket = ''.join(et.xpath('//strong[contains(text(), "收费依据")]/..//span/text()')).strip()
         jbxxDic['收费依据'] = chargeTicket
 
         # 是否支持网上支付
-        webCharge = ''.join(et.xpath('//div[@class="sfzccwszf"]//div[@class="sfyjCon"]//text()')).strip()
+        webCharge = ''.join(et.xpath('//strong[contains(text(), "是否支持网上支付")]/..//span/text()')).strip()
         jbxxDic['是否支持网上支付'] = webCharge
 
-        # 收费项目
-        chargeItems = reduce(lambda x, y: x + y, map(lambda x: x.strip(), et.xpath('//div[@class="sfbz_tables"]//span[@class="sfxmmc_cons clearfix"]//text()')), '')
-        jbxxDic['收费项目'] = chargeItems
         # 常见问题
-        faq = reduce(lambda x, y: x + y, map(lambda x: x.strip(), et.xpath('//div[@class="cjwt_table"]//text()')), '')
+        faq = reduce(lambda x, y: x + y, map(lambda x: x.strip(), et.xpath('//div[@class="common-problem"]//text()')), '')
         jbxxDic['常见问题'] = faq
 
         # 咨询电话
-        askPhone = ''.join(et.xpath('//div[@class="zxfs"]//p[@class="zxdh clearfix"]/span[@class="zxfsCon"]//text()')).strip()
+        askPhone = re.sub(r'\s', '', ''.join(et.xpath('//div[@class="zxfs"]/p/text()')).strip())
         jbxxDic['咨询电话'] = askPhone
 
 
         # 咨询地址
-        askAddress = ''.join(et.xpath('//div[@class="zxfs"]//p[@class="zxdz clearfix"]/span[@class="zxfsCon"]//text()')).strip()
+        askAddress = re.sub(r'\s', '', ''.join(et.xpath('//div[@class="zxfs"]/p[2]/text()')).strip())
         jbxxDic['咨询地址'] = askAddress
-
         # 投诉电话
-        complainPhone = ''.join(et.xpath('//div[@class="jdtsfs"]//p[@class="zxdh clearfix"]/span[@class="jdtsfsCon"]//text()')).strip()
+        complainPhone = ''.join(et.xpath('//div[@class="jdtsfs"]/p[1]/text()')).strip()
         jbxxDic['投诉电话'] = complainPhone
 
         # 投诉地址
-        complainAddress = ''.join(et.xpath('//div[@class="jdtsfs"]//p[@class="zxdz clearfix"]/span[@class="jdtsfsCon"]//text()')).strip()
+        complainAddress = ''.join(et.xpath('//div[@class="jdtsfs"]/p[2]/text()')).strip()
         jbxxDic['投诉地址'] = complainAddress
-
-        #咨询网址
-        askLink = ''.join(et.xpath('//*[@id="zxfs"]/p[3]/a/@href'))
-        jbxxDic['咨询网址'] = askLink
-
-        #投诉网址
-        complainLink = ''.join(et.xpath('//*[@id="jdtsfs"]/p[3]/a/@href'))
-        jbxxDic['投诉网址'] = complainLink
-
+        #
+        # #咨询网址
+        # askLink = ''.join(et.xpath('//*[@id="zxfs"]/p[3]/a/@href'))
+        # jbxxDic['咨询网址'] = askLink
+        #
+        # #投诉网址
+        # complainLink = ''.join(et.xpath('//*[@id="jdtsfs"]/p[3]/a/@href'))
+        # jbxxDic['投诉网址'] = complainLink
         return jbxxDic
 
     def analyse(self):
@@ -229,10 +222,11 @@ class AnalyseData:
 
             # 跑0次事项除非有特殊原因外不必填写原因说明
             elif row['到办事现场次数'] == '0次':
-                if (row['必须现场办理原因说明'] != '无' or row['必须现场办理原因说明'] != '') \
+                if (row['必须现场办理原因说明'] != '无' and row['必须现场办理原因说明'] != '') \
                         and ('无需现场' not in row['必须现场办理原因说明'] and row['必须现场办理原因说明'] != '无需到现场办理'):
                     error += '{}. 跑0次事项除非有特殊原因外不必填写原因说明\n'.format(idx)
                     idx += 1
+                    print(row['必须现场办理原因说明'])
                     errorList.append({'ERROR_CODE': '跑零次事项不应有到现场办理原因说明', 'ERROR_DESCRIPTION': '跑0次事项除非有特殊原因外不必填写原因说明'})
 
             # 到现场办事次数为0次事项并且不支持网办事项，办理形式需支持快递收件
@@ -369,19 +363,19 @@ class AnalyseData:
         df = pd.read_excel('total.xls')
 
     def __getTableSum(self, html):
-        rows = len(html.xpath('//div[@class="bllc_con"]//table[1]//tr'))
+        rows = len(html.xpath('//div[@class="Process-flow-table"]//table[1]//tr'))
 
         keywords = ['受理', '审核', '审查', '核准', '决定', '办结', '审批', '制证', '签发']
         sum = 0
         for i in range(1, rows + 1):
-            procedure = ''.join(html.xpath('//div[@class="bllc_con"]//table[1]//tr[{}]/td[1]//text()'.format(i)))
+            procedure = ''.join(html.xpath('//div[@class="Process-flow-table"]//table[1]//tr[{}]/td[1]//text()'.format(i)))
             selected = reduce(lambda a, b: a | b, [k in procedure for k in keywords], False)
             if selected:
-                curTime = ''.join(html.xpath('//div[@class="bllc_con"]//table[1]//tr[{}]/td[2]//text()'.format(i)))
+                curTime = ''.join(html.xpath('//div[@class="Process-flow-table"]//table[1]//tr[{}]/td[2]//text()'.format(i)))
 
                 #判断是否第二列是时间
                 if not '即办' in curTime and not '工作日' in curTime:
-                    curTime = ''.join(html.xpath('//div[@class="bllc_con"]//table[1]//tr[{}]/td[3]//text()'.format(i)))
+                    curTime = ''.join(html.xpath('//div[@class="Process-flow-table"]//table[1]//tr[{}]/td[3]//text()'.format(i)))
 
                 workDays = re.search(r'(\d\.*\d*)个*工作日', curTime)
                 if len(curTime) > 30:  #太长了，不是描述时间的
@@ -426,4 +420,3 @@ class AnalyseData:
 a = AnalyseData('../../事项表/totalQlsx.xls')
 a.run()
 a.analyse()
-
