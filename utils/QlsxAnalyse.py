@@ -1,5 +1,6 @@
 import pandas as pd
 import arrow
+from IPython.display import display
 
 
 class QlsxAnalyse:
@@ -8,7 +9,7 @@ class QlsxAnalyse:
         with open('部门编码地区映射', 'r', encoding='utf-8') as fp:
             self.__areaList = fp.readlines()
 
-        self.__targets = ['事项总数', '网上可办事项数', '网上可办率（100%）', '掌上可办事项数', '掌上可办率（98%）', '即办事项数', '即办率（60%）', '承诺时限压缩比（91%）', '跑零次事项数', '跑零次率（99.5%）']
+        self.__targets = ['事项总数', '网上可办事项数', '网上可办率', '掌上可办事项数', '掌上可办率', '即办事项数', '即办率', '法定期限总和', '承诺期限总和' '承诺时限压缩比', '跑零次事项数', '跑零次率']
 
         self.__whiteDf = pd.read_excel('不宜跑零次.xlsx')
     def __regionMap(self, code: str):
@@ -60,13 +61,13 @@ class QlsxAnalyse:
 
         # 跑零次
         paolingciNum = df[df['办事者到办事地点最少次数'] == '0'].shape[0]
-        allowLis = df[(df['办事者到办事地点最少次数'] != '0') & (df['权力基本码'].isin(self.__whiteDf['权力基本码']))]
+        allowLis = df[(df['办事者到办事地点最少次数'] != '0') & (df['权力基本码'].str.startsWith(self.__whiteDf['权力基本码']))]
         try:
             paolingci = df[df['办事者到办事地点最少次数'] == '0'].shape[0] / (baseNum - allowLis.shape[0])
         except Exception as e:
             paolingci = 1
 
-        return {'网上可办率': wangban, '掌上可办率': zhangban, '即办率': jiban, '承诺时限压缩比': yasuobi, '跑零次率': paolingci, '网上可办事项数': wangbanNum, '掌上可办事项数': zhangbanNum, '即办事项数': jibanNum, '跑零次事项数': paolingciNum, '事项总数': baseNum}
+        return {'网上可办率': wangban, '掌上可办率': zhangban, '即办率': jiban, '承诺时限压缩比': yasuobi, '跑零次率': paolingci, '网上可办事项数': wangbanNum, '掌上可办事项数': zhangbanNum, '即办事项数': jibanNum, '跑零次事项数': paolingciNum, '事项总数': baseNum, '法定期限总和': lawTotal, '承诺期限总和': actuallyTotal}
 
     def run(self):
 
@@ -82,7 +83,7 @@ class QlsxAnalyse:
         wenzhouTarget['区县'] = '汇总'
         totalDf = totalDf.append(wenzhouTarget, ignore_index=True)
 
-        writer = pd.ExcelWriter('{}全市依申请政务服务指标.xls'.format(arrow.now().strftime('%m%d')))
+        writer = pd.ExcelWriter('{}全市许可政务服务指标.xls'.format(arrow.now().strftime('%m%d')))
 
         quxianDfs = df.groupby('区县')
 
@@ -103,13 +104,25 @@ class QlsxAnalyse:
         totalDf.to_excel(writer, sheet_name='汇总', index=False)
         writer.save()
 
-    def dataHighlight(self, val):
-        print(111)
-        return {'color: red'}
+    def dataHighlight(self, val:pd.Series):
+        styleDict = 'font-family: 仿宋_GB2312; font-size: 14;'
+        print(val.name)
+        if val.name == '即办率': #76.1%
+            colors = ['color: red' if v < 0.761 else 'color: black' for v in val]
+            return colors
+        if val.name == '承诺时限压缩比': #92.5%
+            colors = ['color: red' if v < 0.925 else 'color: black' for v in val]
+
+
+        return ['color: yellow' for v in val]
 
     def highlight(self):
-        dfs = pd.read_excel('1102全市依申请政务服务指标.xls', sheet_name='汇总')
-        dfs.apply(self.dataHighlight)
+        dfs = pd.read_excel('1015全市依申请政务服务指标.xls', sheet_name='汇总')
+        dfs.style.format('{.2f%}')
+        # s = dfs.style.format({'即办率': '{:.2%}', '承诺时限压缩比': '{:.2%}'})
+        # s = s.apply(self.dataHighlight)
+        display(dfs)
+        dfs.to_excel('123.xlsx', index=False)
 
 
 
