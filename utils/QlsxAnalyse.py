@@ -79,8 +79,8 @@ class QlsxAnalyse:
         totalDf = pd.DataFrame(columns=['区县'] + self.__targets) #全部汇总表
 
         #先把汇总的搞进去
-        wenzhouTarget = self.__calculate(df)
-        wenzhouTarget['区县'] = '汇总'
+        wenzhouTarget = self.__calculate(df[df['区县'] != '市本级'])
+        wenzhouTarget['区县'] = '区县汇总'
         totalDf = totalDf.append(wenzhouTarget, ignore_index=True)
 
         writer = pd.ExcelWriter('{}全市许可政务服务指标.xls'.format(arrow.now().strftime('%m%d')))
@@ -113,19 +113,17 @@ class QlsxAnalyse:
         if val.name == '承诺时限压缩比': #92.5%
             colors = ['color: red' if v < 0.925 else 'color: black' for v in val]
 
-
         return ['color: yellow' for v in val]
 
     def highlight(self):
         dfs = pd.read_excel('1015全市依申请政务服务指标.xls', sheet_name='汇总')
-        dfs.style.format('{.2f%}')
+        dfStyle = dfs.style.format('{.2%}')
         # s = dfs.style.format({'即办率': '{:.2%}', '承诺时限压缩比': '{:.2%}'})
         # s = s.apply(self.dataHighlight)
-        display(dfs)
-        dfs.to_excel('123.xlsx', index=False)
+        dfStyle.to_excel('123.xlsx', index=False)
 
 
 
 a = QlsxAnalyse()
-# a.run()
-a.highlight()
+a.run()
+# a.highlight()

@@ -13,7 +13,7 @@ import traceback
 
 class AnalyseData:
     # 要分析的事项列表xls
-    __analyseFilename = '../../事项表/totalQlsx.xlsx'
+    __analyseFilename = ''
 
     def __init__(self, filename):
         with open('部门编码地区映射', 'r', encoding='utf-8') as fp:
@@ -62,7 +62,6 @@ class AnalyseData:
                 pbar.update(1)
 
             ddf = pd.DataFrame(res1)
-            print(ddf.columns)
             w = pd.ExcelWriter('test.xls')
             ddf.to_excel(w, '事项信息', index=False)
             w.save()
@@ -168,7 +167,7 @@ class AnalyseData:
             idx = 1
             # 承诺办结时间为即办，办件类型必须为即办件，事项审查类型为即审即办
             if row['承诺办结时限'] == '即办':
-                if row['办件类型'] != '即办件' or row['事项审查类型'] != '即审即办':
+                if '即办件' not in row['办件类型'] or row['事项审查类型'] != '即审即办':
                     error += '{}. 承诺办结时间为即办，办件类型必须为即办件，事项审查类型为即审即办\n'.format(idx)
                     idx += 1
                     errorList.append({'ERROR_CODE': '办结时间和办件类型不对应', 'ERROR_DESCRIPTION': ' 承诺办结时间为即办，办件类型必须为即办件，事项审查类型为即审即办'})
@@ -226,7 +225,6 @@ class AnalyseData:
                         and ('无需现场' not in row['必须现场办理原因说明'] and row['必须现场办理原因说明'] != '无需到现场办理'):
                     error += '{}. 跑0次事项除非有特殊原因外不必填写原因说明\n'.format(idx)
                     idx += 1
-                    print(row['必须现场办理原因说明'])
                     errorList.append({'ERROR_CODE': '跑零次事项不应有到现场办理原因说明', 'ERROR_DESCRIPTION': '跑0次事项除非有特殊原因外不必填写原因说明'})
 
             # 到现场办事次数为0次事项并且不支持网办事项，办理形式需支持快递收件
@@ -414,9 +412,6 @@ class AnalyseData:
             appendLis.append({'AREA': row['区县'], 'DEPARTMENT': row['部门名称'], 'QL_BASIC_CODE': row['权力基本码'], 'MATTER_NAME': row['事项名称'], 'ERROR_CODE': e['ERROR_CODE'], 'ERROR_DESCRIPTION': e['ERROR_DESCRIPTION'], 'QL_INNER_CODE': row['内部编码']})
         return pd.DataFrame(appendLis)
 
-    def temp(self):
-        print(self.__isAddressAccurate('龙港市农业农村局林业科(龙港市江滨路184号)'))
-
-a = AnalyseData('../../事项表/totalQlsx.xls')
+a = AnalyseData('../../事项表/totalQlsxQx.xls')
 a.run()
 a.analyse()
