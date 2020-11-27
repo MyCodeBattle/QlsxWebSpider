@@ -9,7 +9,7 @@ class QlsxAnalyse:
         with open('部门编码地区映射', 'r', encoding='utf-8') as fp:
             self.__areaList = fp.readlines()
 
-        self.__targets = ['事项总数', '网上可办事项数', '网上可办率', '掌上可办事项数', '掌上可办率', '即办事项数', '即办率', '法定期限总和', '承诺期限总和' '承诺时限压缩比', '跑零次事项数', '跑零次率']
+        self.__targets = ['事项总数', '即办事项数', '即办率', '法定期限总和', '承诺期限总和', '承诺时限压缩比', '跑零次事项数', '平均跑动次数']
 
         self.__whiteDf = pd.read_excel('不宜跑零次.xlsx')
     def __regionMap(self, code: str):
@@ -61,29 +61,36 @@ class QlsxAnalyse:
 
         # 跑零次
         paolingciNum = df[df['办事者到办事地点最少次数'] == '0'].shape[0]
-        allowLis = df[(df['办事者到办事地点最少次数'] != '0') & (df['权力基本码'].str.startsWith(self.__whiteDf['权力基本码']))]
+        allowLis = df[(df['办事者到办事地点最少次数'] != '0') & (df['权力基本码'].str.startswith(self.__whiteDf['权力基本码']))]
+        df['办事者到办事地点最少次数'] = df['办事者到办事地点最少次数'].astype(int)
+        paolingciSum = df['办事者到办事地点最少次数'].sum()
+        avePaolingci = paolingciSum / baseNum
+
         try:
             paolingci = df[df['办事者到办事地点最少次数'] == '0'].shape[0] / (baseNum - allowLis.shape[0])
         except Exception as e:
             paolingci = 1
 
-        return {'网上可办率': wangban, '掌上可办率': zhangban, '即办率': jiban, '承诺时限压缩比': yasuobi, '跑零次率': paolingci, '网上可办事项数': wangbanNum, '掌上可办事项数': zhangbanNum, '即办事项数': jibanNum, '跑零次事项数': paolingciNum, '事项总数': baseNum, '法定期限总和': lawTotal, '承诺期限总和': actuallyTotal}
+        return {'网上可办率': wangban, '掌上可办率': zhangban, '即办率': jiban, '承诺时限压缩比': yasuobi, '网上可办事项数': wangbanNum, '掌上可办事项数': zhangbanNum, '即办事项数': jibanNum, '跑零次事项数': paolingciNum, '事项总数': baseNum, '法定期限总和': lawTotal, '承诺期限总和': actuallyTotal, '平均跑动次数': avePaolingci}
 
     def run(self):
 
-        df = self.__clean(pd.read_excel('totalQlsx.xls', dtype=str).fillna(''))
-        df = df[df['权力基本码'].str.contains('许可')] #依申请事项
-        df.to_excel('检测数据.xls', index=False)
+        df = self.__clean(pd.read_excel('totalQlsxQx.xls', dtype=str).fillna(''))
+        # df = df[df['权力基本码'].str.contains('许可')] #依申请事项
         df['区县'] = df['组织编码（即部门编码）'].apply(lambda e: self.__regionMap(e))
+        df.to_excel('检测数据.xls', index=False)
 
         totalDf = pd.DataFrame(columns=['区县'] + self.__targets) #全部汇总表
 
         #先把汇总的搞进去
-        wenzhouTarget = self.__calculate(df[df['区县'] != '市本级'])
-        wenzhouTarget['区县'] = '区县汇总'
-        totalDf = totalDf.append(wenzhouTarget, ignore_index=True)
+        try:
+            wenzhouTarget = self.__calculate(df[df['区县'] != '市本级'])
+            wenzhouTarget['区县'] = '区县汇总'
+            totalDf = totalDf.append(wenzhouTarget, ignore_index=True)
+        except:
+            pass
 
-        writer = pd.ExcelWriter('{}全市许可政务服务指标.xls'.format(arrow.now().strftime('%m%d')))
+        writer = pd.ExcelWriter('{}全市许可政务服务指标.xlsx'.format(arrow.now().strftime('%m%d')), engine='xlsxwriter')
 
         quxianDfs = df.groupby('区县')
 
@@ -99,9 +106,9 @@ class QlsxAnalyse:
                 deptTarget['部门名称'] = dept
                 quxianTotal = quxianTotal.append(deptTarget, ignore_index=True)
 
-            quxianTotal.to_excel(writer, sheet_name=quxian, index=False)
+            quxianTotal.to_excel(writer, sheet_name=quxian, index=False, columns=['部门名称'] + self.__targets)
 
-        totalDf.to_excel(writer, sheet_name='汇总', index=False)
+        totalDf.to_excel(writer, sheet_name='汇总', index=False, columns=['区县'] + self.__targets)
         writer.save()
 
     def dataHighlight(self, val:pd.Series):
@@ -117,10 +124,15 @@ class QlsxAnalyse:
 
     def highlight(self):
         dfs = pd.read_excel('1015全市依申请政务服务指标.xls', sheet_name='汇总')
-        dfStyle = dfs.style.format('{.2%}')
-        # s = dfs.style.format({'即办率': '{:.2%}', '承诺时限压缩比': '{:.2%}'})
-        # s = s.apply(self.dataHighlight)
-        dfStyle.to_excel('123.xlsx', index=False)
+        writer = pd.ExcelWriter('123.xlsx', 'xlsxwriter')
+        dfs.to_excel(writer, sheet_name='Sheet1')
+        bookObj = writer.book
+        writerObj = writer.book.sheetnames['Sheet1']
+        formatObj = bookObj.add_format({'num_format': '0.00%'})
+
+        writerObj.set_column('I:I', cell_format=formatObj)
+        writerObj.set_column('J:J', cell_format=formatObj)
+        writer.save()
 
 
 

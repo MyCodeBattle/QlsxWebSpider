@@ -352,8 +352,12 @@ class AnalyseData:
         df = df[['区县', '部门名称', '事项名称', '事项类型', '权力基本码', '内部编码', '事项地址', '错误情况']]
         df.to_excel('total.xls', index=False)
         singleDf = df.groupby('区县')
+
+        writer = pd.ExcelWriter('{}错误情况.xlsx'.format(arrow.now().strftime('%m%d')))
         for name, d in singleDf:
-            d.to_excel('{}{}错误情况.xls'.format(arrow.now().format('MMDD'), name), index=False)
+            d.to_excel(writer, name, index=False)
+
+        writer.save()
 
         errorDf.to_excel('errordf.xls', index=False)
 
