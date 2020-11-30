@@ -32,4 +32,8 @@ newDf['准确率'] = newDf['正确事项数'] / newDf['事项总数']
 newDf['许可类准确率'] = newDf['正确许可数'] / newDf['许可类总数']
 newDf['总排名'] = newDf['准确率'].rank(method='min', ascending=False)
 newDf.to_excel(writer, '汇总', index=False)
+
+# df = pd.read_excel('errordf.xls')
+# dfs = df.groupby(['AREA', 'DEPARTMENT', 'MATTER_NAME'])
+
 writer.save()

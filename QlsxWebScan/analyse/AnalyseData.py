@@ -220,12 +220,12 @@ class AnalyseData:
                     errorList.append({'ERROR_CODE': '需要跑现场无说明', 'ERROR_DESCRIPTION': '到办事现场次数非0次事项需填写原因说明'})
 
             # 跑0次事项除非有特殊原因外不必填写原因说明
-            elif row['到办事现场次数'] == '0次':
-                if (row['必须现场办理原因说明'] != '无' and row['必须现场办理原因说明'] != '') \
-                        and ('无需现场' not in row['必须现场办理原因说明'] and row['必须现场办理原因说明'] != '无需到现场办理'):
-                    error += '{}. 跑0次事项除非有特殊原因外不必填写原因说明\n'.format(idx)
-                    idx += 1
-                    errorList.append({'ERROR_CODE': '跑零次事项不应有到现场办理原因说明', 'ERROR_DESCRIPTION': '跑0次事项除非有特殊原因外不必填写原因说明'})
+            # elif row['到办事现场次数'] == '0次':
+            #     if (row['必须现场办理原因说明'] != '无' and row['必须现场办理原因说明'] != '') \
+            #             and ('无需现场' not in row['必须现场办理原因说明'] and row['必须现场办理原因说明'] != '无需到现场办理'):
+            #         error += '{}. 跑0次事项除非有特殊原因外不必填写原因说明\n'.format(idx)
+            #         idx += 1
+            #         errorList.append({'ERROR_CODE': '跑零次事项不应有到现场办理原因说明', 'ERROR_DESCRIPTION': '跑0次事项除非有特殊原因外不必填写原因说明'})
 
             # 到现场办事次数为0次事项并且不支持网办事项，办理形式需支持快递收件
             if row['到办事现场次数'] == '0次':
@@ -419,3 +419,4 @@ class AnalyseData:
 a = AnalyseData('../../事项表/totalQlsxQx.xls')
 a.run()
 a.analyse()
+

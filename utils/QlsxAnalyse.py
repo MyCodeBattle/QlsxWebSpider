@@ -62,7 +62,7 @@ class QlsxAnalyse:
         # 跑零次
         paolingciNum = df[df['办事者到办事地点最少次数'] == '0'].shape[0]
         allowLis = df[(df['办事者到办事地点最少次数'] != '0') & (df['权力基本码'].str.startswith(self.__whiteDf['权力基本码']))]
-        df['办事者到办事地点最少次数'] = df['办事者到办事地点最少次数'].astype(int)
+        df['办事者到办事地点最少次数'] = df['办事者到办事地点最少次数'].replace('', 0).astype(int)
         paolingciSum = df['办事者到办事地点最少次数'].sum()
         avePaolingci = paolingciSum / baseNum
 
@@ -113,25 +113,39 @@ class QlsxAnalyse:
 
     def dataHighlight(self, val:pd.Series):
         styleDict = 'font-family: 仿宋_GB2312; font-size: 14;'
-        print(val.name)
         if val.name == '即办率': #76.1%
             colors = ['color: red' if v < 0.761 else 'color: black' for v in val]
             return colors
         if val.name == '承诺时限压缩比': #92.5%
             colors = ['color: red' if v < 0.925 else 'color: black' for v in val]
+            return colors
 
-        return ['color: yellow' for v in val]
+        return ['color: black' for v in val]
+
+    def wenzhouHighlight(self, val):
+        if val.name == '即办率':
+            return ['color: red' if v < 0.8773 else 'color: black' for v in val]
+
+        if val.name == '承诺时限压缩比': #92.5%
+            colors = ['color: red' if v < 0.9716 else 'color: black' for v in val]
+            return colors
+
+        return ['color: black' for v in val]
 
     def highlight(self):
-        dfs = pd.read_excel('1015全市依申请政务服务指标.xls', sheet_name='汇总')
+        dfs = pd.read_excel('1015全市依申请政务服务指标.xls', sheet_name=None)
         writer = pd.ExcelWriter('123.xlsx', 'xlsxwriter')
-        dfs.to_excel(writer, sheet_name='Sheet1')
-        bookObj = writer.book
-        writerObj = writer.book.sheetnames['Sheet1']
-        formatObj = bookObj.add_format({'num_format': '0.00%'})
+        for name in dfs:
+            sht = dfs[name]
+            sht.style.applymap(self.dataHighlight)
+            sht.to_excel(writer, sheet_name=name)
+            bookObj = writer.book
+            writerObj = writer.book.sheetnames[name]
+            formatObj = bookObj.add_format({'num_format': '0.00%'})
 
-        writerObj.set_column('I:I', cell_format=formatObj)
-        writerObj.set_column('J:J', cell_format=formatObj)
+            writerObj.set_column('I:I', cell_format=formatObj)
+            writerObj.set_column('J:J', cell_format=formatObj)
+
         writer.save()
 
 
