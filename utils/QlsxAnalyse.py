@@ -9,7 +9,7 @@ class QlsxAnalyse:
         with open('部门编码地区映射', 'r', encoding='utf-8') as fp:
             self.__areaList = fp.readlines()
 
-        self.__targets = ['事项总数', '即办事项数', '即办率', '法定期限总和', '承诺期限总和', '承诺时限压缩比', '跑零次事项数', '平均跑动次数']
+        self.__targets = ['事项总数', '即办事项数', '即办率', '法定期限总和', '承诺期限总和', '承诺时限压缩比', '跑零次事项数', '平均跑动次数', '跑零次率']
 
         self.__whiteDf = pd.read_excel('不宜跑零次.xlsx')
     def __regionMap(self, code: str):
@@ -71,7 +71,7 @@ class QlsxAnalyse:
         except Exception as e:
             paolingci = 1
 
-        return {'网上可办率': wangban, '掌上可办率': zhangban, '即办率': jiban, '承诺时限压缩比': yasuobi, '网上可办事项数': wangbanNum, '掌上可办事项数': zhangbanNum, '即办事项数': jibanNum, '跑零次事项数': paolingciNum, '事项总数': baseNum, '法定期限总和': lawTotal, '承诺期限总和': actuallyTotal, '平均跑动次数': avePaolingci}
+        return {'网上可办率': wangban, '掌上可办率': zhangban, '即办率': jiban, '承诺时限压缩比': yasuobi, '网上可办事项数': wangbanNum, '掌上可办事项数': zhangbanNum, '即办事项数': jibanNum, '跑零次事项数': paolingciNum, '事项总数': baseNum, '法定期限总和': lawTotal, '承诺期限总和': actuallyTotal, '平均跑动次数': avePaolingci, '跑零次率': paolingci}
 
     def run(self):
 
