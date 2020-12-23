@@ -1,4 +1,5 @@
 from lxml import etree
+import pathlib
 import re
 import re
 from typing import List
@@ -20,6 +21,7 @@ class AnalyseData:
             self.__areaList = fp.readlines()
         self.__analyseFilename = filename
         self.__contentDict = {}
+        self.__path = pathlib.Path('D:\Documents\工作相关\工作任务\办事指南')
 
     def isChinese(self, word):
         for ch in word:
@@ -75,8 +77,7 @@ class AnalyseData:
 
         attrs = ['事项名称', '事项类型', '服务对象', '办件类型', '到办事现场次数', '网上办理深度', '必须现场办理原因说明', '事项审查类型', '自然人主题分类', '法人主题分类', '是否网办', '办理形式', '审批结果类型', '审批结果名称', '是否支持物流快递', '送达时限', '送达方式']
         for attr in attrs:
-            jbxxDic[attr] = self.joinStrip(et.xpath('//td[@class="zjzw-procedure-tabItem-name" and contains(text(), "{}")]//following-sibling::*[1]//text()'.format(attr)))
-
+            jbxxDic[attr] = self.joinStrip(et.xpath('//td[@class="zjzw-procedure-tabItem-name" and (text()="{}")]//following-sibling::*[1]//text()'.format(attr)))
 
         # #组装基本信息
 
@@ -310,7 +311,7 @@ class AnalyseData:
                 errorList.append({'ERROR_CODE': '联系电话为空或者和投诉电话相等', 'ERROR_DESCRIPTION': '联系方式不为空且和投诉电话不相等，并且带区号0577'})
 
             # 许可类事项环节可能存在异常（必须为表格且包含受理、审核、审批、办结、送达等环节）
-            if row['办理环节数'] == -1 and row['事项类型'] == '行政许可':
+            if int(row['办理环节数']) == -1 and row['事项类型'] == '行政许可':
                 error += '{}. 许可类事项办理流程必须为表格\n'.format(idx)
                 idx += 1
                 errorList.append({'ERROR_CODE': '办理流程不是表格形式', 'ERROR_DESCRIPTION': '许可类事项办理流程必须为表格'})
@@ -353,7 +354,7 @@ class AnalyseData:
         df.to_excel('total.xls', index=False)
         singleDf = df.groupby('区县')
 
-        writer = pd.ExcelWriter('{}错误情况.xlsx'.format(arrow.now().strftime('%m%d')))
+        writer = pd.ExcelWriter(self.__path.joinpath('{}错误情况.xlsx'.format(arrow.now().strftime('%m%d'))))
         for name, d in singleDf:
             d.to_excel(writer, name, index=False)
 
